@@ -25,3 +25,6 @@ results/full/
 *.log
 
 # Keep: results/<experiment>/*.csv, *.json and docs/figures/*.png (small, shown in README)
+
+# CLI outputs
+runs/
