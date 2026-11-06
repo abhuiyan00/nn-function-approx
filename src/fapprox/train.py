@@ -21,6 +21,8 @@ Array = np.ndarray
 class TrainConfig:
     optimizer: str = "adam"        # adam | sgd | momentum | nesterov | lm
     lr: float = 1e-3
+    lr_schedule: str = "constant"  # constant | cosine (anneal to lr_min over `epochs`)
+    lr_min: float = 1e-5
     batch: int = 64                # 0 or >= N means full batch
     epochs: int = 300              # for LM: maximum iterations
     patience: int = 50             # epochs without val improvement (0 = off)
@@ -49,6 +51,7 @@ class History:
     val_mse: list = field(default_factory=list)     # scaled units
     wall: list = field(default_factory=list)        # seconds since start
     updates: list = field(default_factory=list)     # cumulative parameter updates
+    mu: list = field(default_factory=list)          # LM damping after each iteration
     best_epoch: int = -1
     best_val: float = np.inf
     stop_reason: str = ""
@@ -93,6 +96,8 @@ def fit(net: Network, x_tr: Array, z_tr: Array, x_va: Array, z_va: Array,
             opt = make_optimizer(cfg.optimizer, net.params, cfg.lr, cfg.momentum)
             best = net.get_flat()  # parameter vector changed size
             hist.best_val = mse(net, x_va, z_va)
+        if cfg.lr_schedule == "cosine":
+            opt.lr = cfg.lr_min + 0.5 * (cfg.lr - cfg.lr_min) * (1.0 + np.cos(np.pi * (ep - 1) / cfg.epochs))
         order = rng.permutation(n) if bs < n else np.arange(n)
         for s in range(0, n, bs):
             idx = order[s: s + bs]
@@ -193,6 +198,7 @@ def fit_lm(net: Network, x_tr: Array, z_tr: Array, x_va: Array, z_va: Array,
         hist.val_mse.append(va)
         hist.wall.append(time.perf_counter() - t0)
         hist.updates.append(updates)
+        hist.mu.append(mu)
         if callback:
             callback(it, net)
         if va < hist.best_val:
