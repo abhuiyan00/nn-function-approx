@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Editors / OS
+.idea/
+.DS_Store
+Thumbs.db
+
+# Experiment artefacts that are large or reproducible
+results/**/checkpoints/
+results/**/*.npz
+results/full/
+*.log
+
+# Keep: results/<experiment>/*.csv, *.json and docs/figures/*.png (small, shown in README)
