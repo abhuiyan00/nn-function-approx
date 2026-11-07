@@ -1,0 +1,11 @@
+* text=auto
+Makefile text eol=lf
+
+*.png binary
+*.gif binary
+
+# Generated files: collapsed in diffs, left out of the language statistics
+results/** linguist-generated
+docs/RESULTS.md linguist-generated
+ui/package-lock.json linguist-generated
+ui/src/components/ui/** linguist-generated
