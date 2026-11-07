@@ -71,8 +71,8 @@ gantt
     Consultation P3 (demo quick results)     :milestone, m1, 2026-11-16, 0d
     Full-profile runs (overnight, 5 seeds)   :b2, 2026-11-16, 2026-11-22
     section Analyse
-    A: E0-E5 analysis and figures            :a1, 2026-11-17, 2026-11-29
-    B: E6, U1-U4 analysis and figures        :a2, 2026-11-17, 2026-11-29
+    Member A, E0-E5 analysis and figures            :a1, 2026-11-17, 2026-11-29
+    Member B, E6, U1-U4 analysis and figures        :a2, 2026-11-17, 2026-11-29
     section Write
     Report draft (sections split A/B)        :w1, 2026-11-23, 2026-12-04
     Swap review, presentation update         :w2, 2026-12-04, 2026-12-09
