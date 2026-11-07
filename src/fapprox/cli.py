@@ -1,14 +1,16 @@
-"""Command line: train / predict / targets.
+"""Command line: train / predict / targets / ui.
 
 Examples
     python -m fapprox targets
     python -m fapprox train --target f4 --hidden 32,32 --act tanh --out runs/f4.npz
-    python -m fapprox train --target f7 --arch kan --widths 2,5,1 --grid 5 --optimizer lm
+    python -m fapprox train --target f7 --arch kan --widths 2,1,1 --grid 10 --grid-updates 25,75 --optimizer lm
     python -m fapprox predict runs/f4.npz 0.0 0.5 1.0
+    python -m fapprox ui
 """
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import sys
 
@@ -42,7 +44,8 @@ def cmd_train(a) -> int:
         net = build_mlp(target.dim, _ints(a.hidden), a.act, seed=a.seed,
                         bias_init=a.bias_init, fourier=fourier, w0=a.w0)
     cfg = TrainConfig(optimizer=a.optimizer, lr=a.lr, batch=a.batch, epochs=a.epochs,
-                      patience=a.patience, l2=a.l2, seed=a.seed)
+                      patience=a.patience, l2=a.l2, seed=a.seed,
+                      kan_grid_schedule={it: a.grid for it in _ints(a.grid_updates)})
     print(net)
     hist = fit(net, ds.u_train, ds.z_train, ds.u_val, ds.z_val, cfg)
     m = evaluate(net, ds)
@@ -66,7 +69,19 @@ def cmd_predict(a) -> int:
     return 0
 
 
+def cmd_ui(a) -> int:
+    try:  # optional extra: the engine itself stays NumPy-only
+        from fapprox_ui import serve
+
+        return serve(port=a.port, open_browser=not a.no_browser)
+    except ModuleNotFoundError as exc:
+        print(f'The interface needs extra packages ({exc}). Install them with: pip install -e ".[ui]"', file=sys.stderr)
+        return 1
+
+
 def main(argv=None) -> int:
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding="utf-8")  # formulas contain π; a pipe would use the locale encoding
     p = argparse.ArgumentParser(prog="fapprox", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -83,6 +98,7 @@ def main(argv=None) -> int:
     t.add_argument("--w0", type=float, default=30.0)
     t.add_argument("--widths", default="")
     t.add_argument("--grid", type=int, default=5)
+    t.add_argument("--grid-updates", default="", help="KAN: iterations that refit the grid range to the data, e.g. 25,75")
     t.add_argument("--optimizer", default="adam")
     t.add_argument("--lr", type=float, default=1e-3)
     t.add_argument("--batch", type=int, default=64)
@@ -101,6 +117,11 @@ def main(argv=None) -> int:
     q.add_argument("model")
     q.add_argument("x", nargs="+", type=float)
     q.set_defaults(func=cmd_predict)
+
+    u = sub.add_parser("ui", help="open the visual interface in a browser")
+    u.add_argument("--port", type=int, default=8765)
+    u.add_argument("--no-browser", action="store_true")
+    u.set_defaults(func=cmd_ui)
 
     args = p.parse_args(argv)
     return args.func(args)
