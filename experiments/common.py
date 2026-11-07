@@ -102,7 +102,8 @@ def run_many(specs: list[dict], workers: int = 2, fn=run_one, label: str = "") -
     t0 = time.perf_counter()
     if workers > 1 and len(specs) > 1:
         import multiprocessing as mp
-        ctx = mp.get_context("fork")
+        # Windows has no fork; spawn re-imports the script, which every experiment guards with __main__
+        ctx = mp.get_context("fork" if "fork" in mp.get_all_start_methods() else "spawn")
         with ctx.Pool(workers) as pool:
             out = pool.map(fn, specs, chunksize=1)
     else:
@@ -119,7 +120,7 @@ def save_rows(exp: str, rows: list[dict], name: str = "runs") -> Path:
     for r in clean:
         keys += [k for k in r if k not in keys]
     path = d / f"{name}.csv"
-    with open(path, "w", newline="") as fh:
+    with open(path, "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=keys)
         w.writeheader()
         for r in clean:
@@ -131,7 +132,7 @@ def save_json(exp: str, obj, name: str) -> Path:
     d = RES_DIR / exp
     d.mkdir(parents=True, exist_ok=True)
     path = d / f"{name}.json"
-    path.write_text(json.dumps(obj, indent=2, default=float))
+    path.write_text(json.dumps(obj, indent=2, default=float), encoding="utf-8")
     return path
 
 
@@ -140,7 +141,7 @@ def write_summary(exp: str, title: str, body: str, profile: str) -> Path:
     d.mkdir(parents=True, exist_ok=True)
     path = d / "summary.md"
     stamp = time.strftime("%Y-%m-%d %H:%M")
-    path.write_text(f"## {title}\n\n_Profile: **{profile}** · generated {stamp}_\n\n{body.strip()}\n")
+    path.write_text(f"## {title}\n\n_Profile: **{profile}** · generated {stamp}_\n\n{body.strip()}\n", encoding="utf-8")
     return path
 
 

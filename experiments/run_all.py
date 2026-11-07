@@ -32,11 +32,11 @@ def collect() -> Path:
     for name in ORDER:
         s = ROOT / "results" / name / "summary.md"
         if s.exists():
-            parts.append(s.read_text().strip() + "\n")
+            parts.append(s.read_text(encoding="utf-8").strip() + "\n")
             figs = sorted((ROOT / "docs" / "figures").glob(f"{name}_*.png"))
             parts.append("\n".join(f"![{p.stem}](figures/{p.name})" for p in figs) + "\n")
     out = ROOT / "docs" / "RESULTS.md"
-    out.write_text("\n".join(parts))
+    out.write_text("\n".join(parts), encoding="utf-8")
     return out
 
 
@@ -56,7 +56,7 @@ def main():
             if r.returncode:
                 print(f"  FAILED: {name} (exit {r.returncode})")
         print(f"done in {time.time() - t0:.0f} s")
-    print(f"wrote {collect()}")
+    print(f"wrote {collect().relative_to(ROOT).as_posix()}")
 
 
 if __name__ == "__main__":
