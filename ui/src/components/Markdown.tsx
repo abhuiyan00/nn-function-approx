@@ -27,7 +27,9 @@ const components: ComponentProps<typeof ReactMarkdown>["components"] = {
   },
   img: ({ src, alt }) => {
     const url = rewriteImage(typeof src === "string" ? src : undefined);
-    return url ? <img src={url} alt={alt ?? ""} loading="lazy" className="my-3 max-w-full rounded-md border bg-white" /> : null;
+    if (!url) return null;
+    if (/^https?:/i.test(url)) return <img src={url} alt={alt ?? ""} loading="lazy" className="mr-1 inline-block align-middle" />; // badges
+    return <img src={url} alt={alt ?? ""} loading="lazy" className="my-3 max-w-full rounded-md border bg-white" />;
   },
   table: ({ node: _node, ...p }) => (
     <div className="my-3 overflow-x-auto rounded-md border bg-card">
