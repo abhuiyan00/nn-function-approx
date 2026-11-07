@@ -1,0 +1,193 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Swiss minimalism: quiet neutrals so the data is the only loud thing on screen.
+   Surfaces, ink and series follow the validated dataviz palette; --subtle is one step
+   darker than the palette's axis gray so small text clears 4.5:1 on the surface. */
+:root {
+  color-scheme: light;
+  --background: #f9f9f7;
+  --foreground: #0b0b0b;
+  --surface: #fcfcfb;
+  --wash: #f1f1ed;
+  --ink-2: #52514e;
+  --subtle: #6b6a65;
+  --border: #e1e0d9;
+  --axis: #c3c2b7;
+  --primary: #256abf;
+  --primary-foreground: #ffffff;
+  --ring: #2a78d6;
+  --destructive: #d03b3b;
+
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #6250d6;
+  --series-8: #e34948;
+
+  --good: #006300;
+  --warning-ink: #8a5a00;
+  --warning-wash: #fdf4dd;
+  --critical-ink: #b02a2a;
+  --critical-wash: #fbe9e7;
+  --good-wash: #e6f4e6;
+  --info-wash: #e8f1fc;
+  --info-ink: #1c5cab;
+
+  /* shadcn/ui role names */
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--wash);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--wash);
+  --muted-foreground: var(--ink-2);
+  --accent: var(--wash);
+  --accent-foreground: var(--foreground);
+  --input: var(--axis);
+  --radius: 0.5rem;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0d0d0d;
+  --foreground: #f0efec;
+  --surface: #1a1a19;
+  --wash: #262625;
+  --ink-2: #c3c2b7;
+  --subtle: #a3a29a;
+  --border: #2c2c2a;
+  --axis: #4a4a46;
+  --primary: #3987e5;
+  --primary-foreground: #0b0b0b;
+  --ring: #5598e7;
+  --destructive: #e66767;
+
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
+
+  --good: #4cc94c;
+  --warning-ink: #fab219;
+  --warning-wash: #2e2610;
+  --critical-ink: #f09090;
+  --critical-wash: #331a1a;
+  --good-wash: #16271a;
+  --info-wash: #15253a;
+  --info-ink: #86b6ef;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface: var(--surface);
+  --color-wash: var(--wash);
+  --color-subtle: var(--subtle);
+  --color-axis: var(--axis);
+  --color-good: var(--good);
+  --color-good-wash: var(--good-wash);
+  --color-warning-ink: var(--warning-ink);
+  --color-warning-wash: var(--warning-wash);
+  --color-critical-ink: var(--critical-ink);
+  --color-critical-wash: var(--critical-wash);
+  --color-info-ink: var(--info-ink);
+  --color-info-wash: var(--info-wash);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-size: 14px;
+    line-height: 1.5;
+    font-feature-settings: "cv11", "ss03";
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"],
+  [role="option"],
+  [role="checkbox"],
+  [role="switch"],
+  label[for],
+  summary {
+    cursor: pointer;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--ring) 28%, transparent);
+  }
+}
+
+/* Touch screens get full-size targets; the dense sizes are for a mouse. */
+@media (pointer: coarse) {
+  [data-slot="button"],
+  [data-slot="select-trigger"],
+  [data-slot="input"],
+  [data-slot="tabs-trigger"] {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes pulse-dot {
+  50% {
+    opacity: 0.35;
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
