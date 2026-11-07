@@ -1,11 +1,11 @@
 """Command line: train / predict / targets / ui.
 
 Examples
-    python -m fapprox targets
-    python -m fapprox train --target f4 --hidden 32,32 --act tanh --out runs/f4.npz
-    python -m fapprox train --target f7 --arch kan --widths 2,1,1 --grid 10 --grid-updates 25,75 --optimizer lm
-    python -m fapprox predict runs/f4.npz 0.0 0.5 1.0
-    python -m fapprox ui
+    python -m funcprox targets
+    python -m funcprox train --target f4 --hidden 32,32 --act tanh --out runs/f4.npz
+    python -m funcprox train --target f7 --arch kan --widths 2,1,1 --grid 10 --grid-updates 25,75 --optimizer lm
+    python -m funcprox predict runs/f4.npz 0.0 0.5 1.0
+    python -m funcprox ui
 """
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ def cmd_predict(a) -> int:
 
 def cmd_ui(a) -> int:
     try:  # optional extra: the engine itself stays NumPy-only
-        from fapprox_ui import serve
+        from funcprox_ui import serve
 
         return serve(port=a.port, open_browser=not a.no_browser)
     except ModuleNotFoundError as exc:
@@ -82,7 +82,7 @@ def cmd_ui(a) -> int:
 def main(argv=None) -> int:
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding="utf-8")  # formulas contain π; a pipe would use the locale encoding
-    p = argparse.ArgumentParser(prog="fapprox", description=__doc__,
+    p = argparse.ArgumentParser(prog="funcprox", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("targets", help="list target functions").set_defaults(func=cmd_targets)

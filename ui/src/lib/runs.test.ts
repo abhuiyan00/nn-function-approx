@@ -16,7 +16,7 @@ describe("parseIntList", () => {
   });
 });
 
-describe("paramCount mirrors fapprox.model", () => {
+describe("paramCount mirrors funcprox.model", () => {
   it.each([
     [{ hidden: [32] }, 1, 97],
     [{ hidden: [8, 8] }, 1, 97],
@@ -43,11 +43,11 @@ describe("validateSpec", () => {
 describe("cliCommand", () => {
   it("lists only what differs from the CLI defaults", () => {
     expect(cliCommand({ ...defaultSpec, target: "f4", hidden: [16, 16], optimizer: "lm", epochs: 300, patience: 30 }))
-      .toBe("python -m fapprox train --target f4 --hidden 16,16 --optimizer lm --patience 30");
+      .toBe("python -m funcprox train --target f4 --hidden 16,16 --optimizer lm --patience 30");
   });
   it("describes a KAN with its grid updates", () => {
     expect(cliCommand({ ...defaultSpec, target: "f7", arch: "kan", widths: [2, 1, 1], grid: 10, grid_updates: [25, 75], optimizer: "lm" }))
-      .toBe("python -m fapprox train --target f7 --arch kan --widths 2,1,1 --grid 10 --grid-updates 25,75 --optimizer lm");
+      .toBe("python -m funcprox train --target f7 --arch kan --widths 2,1,1 --grid 10 --grid-updates 25,75 --optimizer lm");
   });
 });
 

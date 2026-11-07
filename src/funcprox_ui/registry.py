@@ -7,8 +7,8 @@ from pathlib import Path
 
 import numpy as np
 
-from fapprox import serialize
-from fapprox.functions import TARGETS
+from funcprox import serialize
+from funcprox.functions import TARGETS
 
 from .lab import LabRun, clean, make_grid, round_array
 from .schemas import MODEL_NAME

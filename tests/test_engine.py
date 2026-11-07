@@ -7,13 +7,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from fapprox import bspline
-from fapprox.baselines import ChebyshevLS, PolyInterpolant, SplineLS
-from fapprox.data import make_dataset
-from fapprox.functions import TARGETS, get_target
-from fapprox.gradcheck import gradient_error, jacobian_error
-from fapprox.model import build_kan, build_mlp, kan_param_count, mlp_param_count
-from fapprox.train import History, TrainConfig, fit, mse
+from funcprox import bspline
+from funcprox.baselines import ChebyshevLS, PolyInterpolant, SplineLS
+from funcprox.data import make_dataset
+from funcprox.functions import TARGETS, get_target
+from funcprox.gradcheck import gradient_error, jacobian_error
+from funcprox.model import build_kan, build_mlp, kan_param_count, mlp_param_count
+from funcprox.train import History, TrainConfig, fit, mse
 
 RNG = np.random.default_rng(123)
 X1 = RNG.uniform(-1, 1, (40, 1))
@@ -144,7 +144,7 @@ def test_truthy_callback_stops_training_and_restores_best_weights(optimizer):
 
 def test_importing_the_engine_pins_blas_to_one_thread():
     # measured on the lab's LM preset: spinning BLAS threads make small solves about 2x slower
-    code = "import os, fapprox; print(os.environ['OPENBLAS_NUM_THREADS'], os.environ['OMP_NUM_THREADS'])"
+    code = "import os, funcprox; print(os.environ['OPENBLAS_NUM_THREADS'], os.environ['OMP_NUM_THREADS'])"
     env = {k: v for k, v in os.environ.items() if k not in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS")}
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     assert subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True).stdout.split() == ["1", "1"]

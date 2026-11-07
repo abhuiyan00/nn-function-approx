@@ -28,11 +28,11 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import numpy as np  # noqa: E402
 
-from fapprox.data import make_dataset  # noqa: E402
-from fapprox.functions import get_target  # noqa: E402
-from fapprox.metrics import evaluate, predict_original  # noqa: E402
-from fapprox.model import build_kan, build_mlp  # noqa: E402
-from fapprox.train import TrainConfig, fit  # noqa: E402
+from funcprox.data import make_dataset  # noqa: E402
+from funcprox.functions import get_target  # noqa: E402
+from funcprox.metrics import evaluate, predict_original  # noqa: E402
+from funcprox.model import build_kan, build_mlp  # noqa: E402
+from funcprox.train import TrainConfig, fit  # noqa: E402
 
 FIG_DIR = ROOT / "docs" / "figures"
 RES_DIR = ROOT / "results"

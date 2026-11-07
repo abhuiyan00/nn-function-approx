@@ -30,8 +30,8 @@ npm --prefix ui test                       # if you changed the interface; more 
 * Model files (`*.npz`) stay out of git (`.gitignore`).
 
 ## Code style
-* NumPy only in `src/fapprox` (Matplotlib only in `plotting.py`). Interface dependencies stay in
-  `src/fapprox_ui` and `ui/`; `src/fapprox` must keep working without them.
+* NumPy only in `src/funcprox` (Matplotlib only in `plotting.py`). Interface dependencies stay in
+  `src/funcprox_ui` and `ui/`; `src/funcprox` must keep working without them.
 * Every new layer gets a gradient test in `tests/test_engine.py`.
 * Docstring at the top of each experiment: question, variables, outputs.
 

@@ -11,7 +11,7 @@ from common import fig, fmt, md_table, parse_profile, run_many, run_one, save_ro
 
 import numpy as np
 
-from fapprox import plotting as P
+from funcprox import plotting as P
 
 EXP = "e2_activation_init"
 TARGETS = {"f1": "f1 · sin(2πx)", "f4": "f4 · Runge", "f6": "f6 · |x| (kink)"}

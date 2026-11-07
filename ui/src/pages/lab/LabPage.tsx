@@ -20,7 +20,7 @@ import { ConfigPanel } from "./ConfigPanel";
 import { PRESETS, type Preset } from "./presets";
 import { BaselinesPanel, ComparePanel, DampingPanel, EdgesPanel, LossChart, SpectrumPanel } from "./ResultPanels";
 
-const CONFIG_KEY = "fapprox-lab-config";
+const CONFIG_KEY = "funcprox-lab-config";
 const MAX_COMPARE = 4;
 type Panel = "spectrum" | "damping" | "edges" | "baselines" | "compare";
 

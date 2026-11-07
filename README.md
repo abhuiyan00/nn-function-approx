@@ -49,7 +49,7 @@ npm --prefix ui run build
 **3. Start it**
 
 ```bash
-python -m fapprox ui              # opens http://127.0.0.1:8765
+python -m funcprox ui              # opens http://127.0.0.1:8765
 ```
 
 Next time you only need to activate the environment and repeat step 3. Press `Ctrl+C` in the terminal to stop.
@@ -119,9 +119,9 @@ The engine works without the interface or Node.js:
 
 ```bash
 pip install -e .
-python -m fapprox targets
-python -m fapprox train --target f4 --hidden 16,16 --optimizer lm --epochs 300 --out runs/f4.npz
-python -m fapprox predict runs/f4.npz 0 0.5 1
+python -m funcprox targets
+python -m funcprox train --target f4 --hidden 16,16 --optimizer lm --epochs 300 --out runs/f4.npz
+python -m funcprox predict runs/f4.npz 0 0.5 1
 python experiments/run_all.py --profile quick        # all 11 experiments, about 20 min on 2 cores
 ```
 
@@ -175,7 +175,7 @@ flowchart LR
     F["Target f(x)<br/>f1…f7, known formula"] --> S["Sampling<br/>uniform x, y = f(x) + noise"]
     S --> PRE["Pre-processing<br/>x → [-1, 1] (domain box)<br/>y → z-score (train stats)"]
     PRE --> ENG
-    subgraph ENG["NumPy engine (src/fapprox)"]
+    subgraph ENG["NumPy engine (src/funcprox)"]
         direction TB
         M1["MLP: tanh · sigmoid · ReLU · SiLU"]
         M2["SIREN · Fourier features"]
@@ -227,7 +227,7 @@ flowchart LR
 ## Repository layout
 
 ```
-src/fapprox/            the engine (NumPy only)
+src/funcprox/            the engine (NumPy only)
   functions.py          7 target functions
   data.py               sampling, noise, pre/post-processing
   activations.py        tanh, sigmoid, ReLU, SiLU, sine (SIREN)
@@ -240,7 +240,7 @@ src/fapprox/            the engine (NumPy only)
   metrics.py            RMSE, max error, R², edge-band error, vs exact f
   gradcheck.py          finite-difference checks
   serialize.py, cli.py  model files, command line
-src/fapprox_ui/         the interface's API (FastAPI): lab, results catalog, saved models, job runner
+src/funcprox_ui/         the interface's API (FastAPI): lab, results catalog, saved models, job runner
 ui/                     the interface's frontend (React, TypeScript, Vite)
 experiments/            e0…e6, u1…u4, run_all.py, common.py (profiles quick / full)
 tests/                  pytest suite

@@ -19,7 +19,7 @@ ui:               ## build the frontend and open the interface
 	$(PY) -m pip install -e ".[ui]"
 	npm --prefix ui ci
 	npm --prefix ui run build
-	$(PY) -m fapprox ui
+	$(PY) -m funcprox ui
 
 clean:
 	rm -rf .pytest_cache src/*.egg-info

@@ -12,13 +12,13 @@ from common import fig, fmt, md_table, parse_profile, save_json, write_summary
 
 import numpy as np
 
-from fapprox import plotting as P
-from fapprox.data import make_dataset
-from fapprox.functions import get_target
-from fapprox.gradcheck import gradient_error, jacobian_error
-from fapprox.metrics import evaluate, predict_original
-from fapprox.model import build_kan, build_mlp
-from fapprox.train import TrainConfig, fit
+from funcprox import plotting as P
+from funcprox.data import make_dataset
+from funcprox.functions import get_target
+from funcprox.gradcheck import gradient_error, jacobian_error
+from funcprox.metrics import evaluate, predict_original
+from funcprox.model import build_kan, build_mlp
+from funcprox.train import TrainConfig, fit
 
 EXP = "e0_sanity"
 

@@ -1,4 +1,4 @@
-"""fapprox - a from-scratch NumPy engine for neural function approximation.
+"""funcprox - a from-scratch NumPy engine for neural function approximation.
 
 Soft Computing, Project I, Topic 11 ("Neural network as a device for function
 approximation"), Wroclaw University of Science and Technology, 2026/27.

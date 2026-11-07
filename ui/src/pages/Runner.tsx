@@ -201,7 +201,7 @@ export function Runner() {
             </DialogDescription>
           </DialogHeader>
           {profile === "full" && (
-            <Notice tone="warning" title="The full profile takes hours">Five seeds and 20,000 points. Keep this machine awake and the server running: stopping `python -m fapprox ui` stops the experiment. Closing the browser tab does not.</Notice>
+            <Notice tone="warning" title="The full profile takes hours">Five seeds and 20,000 points. Keep this machine awake and the server running: stopping `python -m funcprox ui` stops the experiment. Closing the browser tab does not.</Notice>
           )}
           {start.error && <Notice tone="critical">{(start.error as Error).message}</Notice>}
           <DialogFooter>

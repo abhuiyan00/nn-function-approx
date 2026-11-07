@@ -31,6 +31,6 @@ runs/
 
 # Frontend: dependencies, build output (npm --prefix ui run build), test artefacts
 node_modules/
-src/fapprox_ui/static/
+src/funcprox_ui/static/
 ui/test-results/
 ui/playwright-report/

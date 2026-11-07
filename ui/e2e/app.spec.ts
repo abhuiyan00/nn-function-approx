@@ -42,7 +42,7 @@ test("a target card opens the lab on that target", async ({ page }) => {
 
 test("the lab recovers from a stale stored configuration and a bad address", async ({ page }) => {
   await page.goto("/lab");
-  await page.evaluate(() => localStorage.setItem("fapprox-lab-config", JSON.stringify({ target: "f99", removed_setting: 1, hidden: [4] })));
+  await page.evaluate(() => localStorage.setItem("funcprox-lab-config", JSON.stringify({ target: "f99", removed_setting: 1, hidden: [4] })));
   await page.goto("/lab");
   await expect(page.getByRole("button", { name: "Train" })).toBeVisible();
   await page.getByRole("button", { name: "Train" }).click();
@@ -254,7 +254,7 @@ for (const theme of ["light", "dark"]) {
   test.describe(`accessibility, ${theme} theme`, () => {
     for (const path of PAGES) {
       test(`${path} has no serious axe violations`, async ({ page }) => {
-        await page.addInitScript((t) => localStorage.setItem("fapprox-theme", t), theme);
+        await page.addInitScript((t) => localStorage.setItem("funcprox-theme", t), theme);
         await page.goto(path);
         await page.waitForLoadState("networkidle");
         const { violations } = await new AxeBuilder({ page }).analyze();

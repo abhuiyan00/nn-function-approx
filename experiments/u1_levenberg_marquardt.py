@@ -14,12 +14,12 @@ import time
 
 import numpy as np
 
-from fapprox import plotting as P
-from fapprox.data import make_dataset
-from fapprox.functions import get_target
-from fapprox.metrics import evaluate
-from fapprox.model import build_mlp
-from fapprox.train import TrainConfig, fit
+from funcprox import plotting as P
+from funcprox.data import make_dataset
+from funcprox.functions import get_target
+from funcprox.metrics import evaluate
+from funcprox.model import build_mlp
+from funcprox.train import TrainConfig, fit
 
 EXP = "u1_levenberg_marquardt"
 METHODS = ["Adam", "LM", "Adam → LM"]

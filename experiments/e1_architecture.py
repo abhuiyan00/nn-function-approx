@@ -11,7 +11,7 @@ from common import (agg, fig, fmt, md_table, parse_profile, run_many, save_rows,
 
 import numpy as np
 
-from fapprox import plotting as P
+from funcprox import plotting as P
 
 EXP = "e1_architecture"
 TARGETS = ["f1", "f4", "f5"]

@@ -15,14 +15,14 @@ with warnings.catch_warnings():  # starlette's notice about its own httpx depend
     warnings.simplefilter("ignore")
     from fastapi.testclient import TestClient  # noqa: E402
 
-from fapprox import cli  # noqa: E402
-from fapprox.data import make_dataset  # noqa: E402
-from fapprox.functions import get_target  # noqa: E402
-from fapprox_ui import catalog  # noqa: E402
-from fapprox_ui.app import create_app  # noqa: E402
-from fapprox_ui.jobs import JobQueue  # noqa: E402
-from fapprox_ui.lab import LabRun, matched_baselines  # noqa: E402
-from fapprox_ui.schemas import RunSpec  # noqa: E402
+from funcprox import cli  # noqa: E402
+from funcprox.data import make_dataset  # noqa: E402
+from funcprox.functions import get_target  # noqa: E402
+from funcprox_ui import catalog  # noqa: E402
+from funcprox_ui.app import create_app  # noqa: E402
+from funcprox_ui.jobs import JobQueue  # noqa: E402
+from funcprox_ui.lab import LabRun, matched_baselines  # noqa: E402
+from funcprox_ui.schemas import RunSpec  # noqa: E402
 
 ORIGIN = "http://127.0.0.1"
 FAST_LM = dict(target="f4", hidden=[6], optimizer="lm", epochs=15, patience=0, n_train=120, n_val=40)

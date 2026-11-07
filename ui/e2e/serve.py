@@ -9,8 +9,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import uvicorn  # noqa: E402
 
-from fapprox_ui.app import create_app  # noqa: E402
-from fapprox_ui.jobs import JobQueue  # noqa: E402
+from funcprox_ui.app import create_app  # noqa: E402
+from funcprox_ui.jobs import JobQueue  # noqa: E402
 
 FAKE_JOB = "import time\nprint('stand-in for the experiment σ', flush=True)\ntime.sleep(0.3)\nprint('finished', flush=True)"
 

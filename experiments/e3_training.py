@@ -9,7 +9,7 @@ from common import fig, fmt, md_table, parse_profile, run_many, save_rows, write
 
 import numpy as np
 
-from fapprox import plotting as P
+from funcprox import plotting as P
 
 EXP = "e3_training"
 LRS = [1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2]

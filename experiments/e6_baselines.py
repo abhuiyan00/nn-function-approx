@@ -10,11 +10,11 @@ from common import fig, fmt, md_table, parse_profile, run_many, save_rows, write
 
 import numpy as np
 
-from fapprox import plotting as P
-from fapprox.baselines import ChebyshevLS, PolyInterpolant, SplineLS
-from fapprox.data import make_dataset
-from fapprox.functions import get_target
-from fapprox.metrics import regression_metrics
+from funcprox import plotting as P
+from funcprox.baselines import ChebyshevLS, PolyInterpolant, SplineLS
+from funcprox.data import make_dataset
+from funcprox.functions import get_target
+from funcprox.metrics import regression_metrics
 
 EXP = "e6_baselines"
 TARGETS = {"f1": "f1 · sin(2πx)", "f4": "f4 · Runge", "f5": "f5 · Franke (2-D)", "f6": "f6 · |x|"}

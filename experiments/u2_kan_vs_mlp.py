@@ -16,14 +16,14 @@ import time
 
 import numpy as np
 
-from fapprox import bspline
-from fapprox import plotting as P
-from fapprox.data import make_dataset
-from fapprox.functions import get_target
-from fapprox.layers import KANLayer
-from fapprox.metrics import evaluate
-from fapprox.model import build_kan, build_mlp
-from fapprox.train import TrainConfig, fit
+from funcprox import bspline
+from funcprox import plotting as P
+from funcprox.data import make_dataset
+from funcprox.functions import get_target
+from funcprox.layers import KANLayer
+from funcprox.metrics import evaluate
+from funcprox.model import build_kan, build_mlp
+from funcprox.train import TrainConfig, fit
 
 EXP = "u2_kan_vs_mlp"
 TARGETS = {"f7": "f7 · exp(sin πx + y²)", "f5": "f5 · Franke", "f4": "f4 · Runge", "f6": "f6 · |x|"}

@@ -13,7 +13,7 @@
     {
       "label": "interface: open",
       "type": "shell",
-      "command": "python -m fapprox ui",
+      "command": "python -m funcprox ui",
       "isBackground": true,
       "problemMatcher": []
     },

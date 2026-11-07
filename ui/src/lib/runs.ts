@@ -1,8 +1,8 @@
 import type { RunSpec } from "./api";
 
-export const MAX_PARAMS_LM = 1500; // same limit as fapprox_ui.schemas
+export const MAX_PARAMS_LM = 1500; // same limit as funcprox_ui.schemas
 
-/** CLI defaults of ``python -m fapprox train``: a command lists only what differs. */
+/** CLI defaults of ``python -m funcprox train``: a command lists only what differs. */
 export const defaultSpec: RunSpec = {
   target: "f1",
   arch: "mlp",
@@ -40,7 +40,7 @@ export function parseIntList(text: string): number[] | null {
 
 const pairs = (w: number[]) => w.slice(0, -1).map((a, i) => [a, w[i + 1]] as const);
 
-/** Mirrors mlp_param_count / kan_param_count in fapprox.model; the server reports the real count. */
+/** Mirrors mlp_param_count / kan_param_count in funcprox.model; the server reports the real count. */
 export function paramCount(spec: RunSpec, dim: number): number {
   if (spec.arch === "kan") {
     const widths = spec.widths ?? [dim, 5, 1];
@@ -71,7 +71,7 @@ export function validateSpec(spec: RunSpec, dim: number): SpecErrors {
 
 export function cliCommand(spec: RunSpec): string {
   const d = defaultSpec;
-  const parts = ["python -m fapprox train"];
+  const parts = ["python -m funcprox train"];
   const add = (flag: string, value: unknown) => parts.push(`--${flag} ${value}`);
   add("target", spec.target);
   if (spec.arch === "kan") {

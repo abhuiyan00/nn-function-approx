@@ -293,7 +293,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(path, init);
   } catch {
-    throw new ApiError("The fapprox server is not responding. Is `python -m fapprox ui` still running?", 0);
+    throw new ApiError("The funcprox server is not responding. Is `python -m funcprox ui` still running?", 0);
   }
   if (response.status === 204) return undefined as T;
   const body = await response.json().catch(() => null);

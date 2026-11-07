@@ -44,7 +44,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       <div className="flex items-center gap-2.5 px-1.5 pt-1">
         <Logo />
         <div className="min-w-0">
-          <div className="text-sm leading-tight font-semibold">fapprox</div>
+          <div className="text-sm leading-tight font-semibold">funcprox</div>
           <div className="truncate text-xs text-subtle">Function approximation</div>
         </div>
       </div>
@@ -86,7 +86,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const title = NAV.find((n) => (n.end ? pathname === n.to : pathname.startsWith(n.to)))?.label;
-    document.title = title ? `${title} · fapprox` : "fapprox";
+    document.title = title ? `${title} · funcprox` : "funcprox";
     document.getElementById("main")?.scrollTo(0, 0);
   }, [pathname]);
 
@@ -101,7 +101,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="left" className="w-64 bg-surface p-0">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <SheetDescription className="sr-only">Pages of the fapprox interface</SheetDescription>
+          <SheetDescription className="sr-only">Pages of the funcprox interface</SheetDescription>
           <SidebarContent onNavigate={() => setOpen(false)} />
         </SheetContent>
       </Sheet>
@@ -112,7 +112,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Menu />
             </Button>
             <Logo />
-            <span className="text-sm font-semibold">fapprox</span>
+            <span className="text-sm font-semibold">funcprox</span>
           </div>
           <div className="hidden text-xs text-subtle lg:block">Soft Computing · Project I · Topic 11 · WUST 2026/27</div>
           <ThemeToggle />

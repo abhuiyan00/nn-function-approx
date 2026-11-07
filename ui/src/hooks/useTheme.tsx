@@ -1,7 +1,7 @@
 import { type ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Theme } from "@/components/charts/core";
 
-const KEY = "fapprox-theme";
+const KEY = "funcprox-theme";
 
 function stored(): Theme | null {
   try {

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-# make `import fapprox` work without installing the package
+# make `import funcprox` work without installing the package
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 

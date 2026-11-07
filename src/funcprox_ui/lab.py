@@ -15,14 +15,14 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
-from fapprox import bspline
-from fapprox.baselines import ChebyshevLS, SplineLS
-from fapprox.data import make_dataset
-from fapprox.functions import Target, get_target
-from fapprox.layers import KANLayer
-from fapprox.metrics import evaluate, regression_metrics
-from fapprox.model import Network, build_kan, build_mlp
-from fapprox.train import History, TrainConfig, fit
+from funcprox import bspline
+from funcprox.baselines import ChebyshevLS, SplineLS
+from funcprox.data import make_dataset
+from funcprox.functions import Target, get_target
+from funcprox.layers import KANLayer
+from funcprox.metrics import evaluate, regression_metrics
+from funcprox.model import Network, build_kan, build_mlp
+from funcprox.train import History, TrainConfig, fit
 
 from .schemas import RunSpec
 

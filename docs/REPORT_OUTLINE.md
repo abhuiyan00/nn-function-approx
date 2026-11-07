@@ -26,7 +26,7 @@ Target length: 15-20 pages + appendix.
 
 ## 4. Tuned topology and parameters of the engine · owner B
 * Engine architecture: layers, per-sample backprop, Jacobian, optimisers, LM, KAN, Fourier features,
-  SIREN (`src/fapprox`), tests and gradient check (E0 table).
+  SIREN (`src/funcprox`), tests and gradient check (E0 table).
 * Sensitivity study and the chosen settings, each with its evidence:
   - topology: E1 (depth vs width) · activation and init: E2 · lr, batch, optimiser: E3
   - regularisation: E5 · data budget: E4

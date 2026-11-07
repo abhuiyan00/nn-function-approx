@@ -1,13 +1,13 @@
-# fapprox interface: frontend
+# funcprox interface: frontend
 
 React, TypeScript, Vite, Tailwind CSS and shadcn/ui, talking to the FastAPI app in
-`src/fapprox_ui`. The engine in `src/fapprox` stays NumPy-only. See the project
+`src/funcprox_ui`. The engine in `src/funcprox` stays NumPy-only. See the project
 [README](../README.md) for how to install and open the interface.
 
 ## Develop
 
 ```bash
-python -m fapprox ui --no-browser      # API on :8765
+python -m funcprox ui --no-browser      # API on :8765
 npm --prefix ui run dev                # hot reload on :5173, proxies the API and images to :8765
 ```
 
@@ -41,7 +41,7 @@ stand-in for experiment jobs, so a test never overwrites anything in the reposit
 
 Add an entry to `EXPERIMENT_CHARTS` in `src/lib/experimentCharts.ts`, naming a result file and its
 columns. A JSON result needs an adapter to rows first: see `ADAPTERS` in
-`src/fapprox_ui/catalog.py`. CSV files work as they are.
+`src/funcprox_ui/catalog.py`. CSV files work as they are.
 
 ## Design rules
 

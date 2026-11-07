@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-import fapprox
+import funcprox
 
 from . import catalog, registry
 from .jobs import JobQueue
@@ -26,7 +26,7 @@ from .schemas import JobRequest, PredictRequest, RunSpec, SaveRequest
 
 STATIC = Path(__file__).resolve().parent / "static"
 STREAM_TICK_S = 0.1
-NOT_BUILT = """<!doctype html><meta charset="utf-8"><title>fapprox</title>
+NOT_BUILT = """<!doctype html><meta charset="utf-8"><title>funcprox</title>
 <body style="font:16px system-ui;margin:3rem"><h1>Frontend not built</h1>
 <p>Run <code>npm --prefix ui ci</code> and <code>npm --prefix ui run build</code>, then reload.
 The API is up: <a href="/api/docs">/api/docs</a>.</p>"""
@@ -82,7 +82,7 @@ def create_app(models_dir: Path | None = None, jobs: JobQueue | None = None) -> 
         lab.shutdown()
         queue.shutdown()  # no experiment keeps running after the interface is closed
 
-    app = FastAPI(title="fapprox interface", version=fapprox.__version__, lifespan=lifespan,
+    app = FastAPI(title="funcprox interface", version=funcprox.__version__, lifespan=lifespan,
                   docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json")
     app.add_middleware(SameOriginWrites)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])  # blocks DNS rebinding
@@ -90,7 +90,7 @@ def create_app(models_dir: Path | None = None, jobs: JobQueue | None = None) -> 
     # ---------------------------------------------------------------- catalog
     @app.get("/api/health")
     def health():
-        return dict(status="ok", version=fapprox.__version__, python=platform.python_version(), numpy=np.__version__,
+        return dict(status="ok", version=funcprox.__version__, python=platform.python_version(), numpy=np.__version__,
                     cpus=os.cpu_count() or 1, built=(STATIC / "index.html").exists())
 
     @app.get("/api/overview")

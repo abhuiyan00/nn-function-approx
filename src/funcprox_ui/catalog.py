@@ -14,7 +14,7 @@ from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 
-from fapprox.functions import TARGETS
+from funcprox.functions import TARGETS
 
 from .lab import clean, make_grid, round_array
 

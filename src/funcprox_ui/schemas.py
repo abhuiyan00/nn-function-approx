@@ -5,8 +5,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from fapprox.functions import TARGETS
-from fapprox.model import kan_param_count, mlp_param_count
+from funcprox.functions import TARGETS
+from funcprox.model import kan_param_count, mlp_param_count
 
 MAX_PARAMS = 200_000
 MAX_PARAMS_LM = 1_500  # LM solves a P x P system every iteration
@@ -16,7 +16,7 @@ MODEL_NAME = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"  # one path component, never h
 
 
 class RunSpec(BaseModel):
-    """One training run; fields mirror ``python -m fapprox train``."""
+    """One training run; fields mirror ``python -m funcprox train``."""
     model_config = ConfigDict(extra="forbid")
 
     target: str = "f1"
