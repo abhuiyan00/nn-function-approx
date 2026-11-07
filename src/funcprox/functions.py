@@ -13,6 +13,17 @@ Every target was chosen to probe one property of neural approximation.
 | f5  | Franke (1979) function              | [0, 1]^2  | classic 2-D benchmark |
 | f6  | abs(x)                              | [-1, 1]   | non-smooth kink: ReLU vs tanh |
 | f7  | exp(sin(pi x) + y^2)                | [-1, 1]^2 | compositional: KAN paper toy example |
+
+The m targets have a missing middle: no training data inside a hole, while the score
+still covers it, so the network has to bridge the hole on its own.
+
+| key | formula | domain | hole | question |
+|-----|---------|--------|------|----------|
+| m1  | sin(2 pi x)          | [-1, 1]     | [-0.25, 0.25]   | can a wave be continued across the hole? |
+| m2  | 1 / (1 + 25 x^2)     | [-1, 1]     | [-0.2, 0.2]     | the peak is hidden: can anything guess it? |
+| m3  | abs(x)               | [-1, 1]     | [-0.3, 0.3]     | the kink is hidden: is it restored or rounded? |
+| m4  | x^3 - x              | [-1.5, 1.5] | [-0.5, 0.5]     | a simple shape: is it recovered? |
+| m5  | exp(sin(pi x) + y^2) | [-1, 1]^2   | [-0.3, 0.3]^2   | the same question in 2-D |
 """
 from __future__ import annotations
 
@@ -36,12 +47,25 @@ class Target:
     extrapolation_domain: tuple | None = None
     # integer k of components sin(k pi x) for spectral analysis (f3 only)
     frequencies: tuple = field(default_factory=tuple)
+    gap: tuple | None = None  # ((lo, hi),) per input dimension: a box without training data
+    points: Array | None = field(default=None, compare=False)  # measured (x, y) rows when no formula exists
 
     def __call__(self, x: Array) -> Array:
         x = np.atleast_2d(x)
         if x.shape[1] != self.dim:
             raise ValueError(f"{self.key} expects {self.dim} input columns, got {x.shape[1]}")
         return self.fn(x).reshape(-1, 1)
+
+    @property
+    def known(self) -> bool:
+        """False for measured points: there is no exact function to score against."""
+        return self.points is None
+
+    def in_gap(self, x: Array) -> Array:
+        if self.gap is None:
+            return np.zeros(len(x), dtype=bool)
+        hole = np.asarray(self.gap, dtype=float)
+        return np.all((x >= hole[:, 0]) & (x <= hole[:, 1]), axis=1)
 
 
 def _franke(x: Array) -> Array:
@@ -78,6 +102,21 @@ TARGETS: dict[str, Target] = {
     "f7": Target("f7", "compositional", "exp(sin(πx) + y²)", 2, ((-1.0, 1.0), (-1.0, 1.0)),
                  lambda x: np.exp(np.sin(np.pi * x[:, 0]) + x[:, 1] ** 2),
                  "compositional structure (Kolmogorov-Arnold form)"),
+    "m1": Target("m1", "sine, missing middle", "sin(2πx)", 1, ((-1.0, 1.0),),
+                 lambda x: np.sin(2 * np.pi * x[:, 0]),
+                 "continuing a wave across a hole", gap=((-0.25, 0.25),)),
+    "m2": Target("m2", "runge, peak hidden", "1 / (1 + 25x²)", 1, ((-1.0, 1.0),),
+                 lambda x: 1.0 / (1.0 + 25.0 * x[:, 0] ** 2),
+                 "a peak the data never shows", gap=((-0.2, 0.2),)),
+    "m3": Target("m3", "kink hidden", "|x|", 1, ((-1.0, 1.0),),
+                 lambda x: np.abs(x[:, 0]),
+                 "restoring a hidden kink", gap=((-0.3, 0.3),)),
+    "m4": Target("m4", "cubic, missing middle", "x³ - x", 1, ((-1.5, 1.5),),
+                 lambda x: x[:, 0] ** 3 - x[:, 0],
+                 "recovering a simple shape across a hole", gap=((-0.5, 0.5),)),
+    "m5": Target("m5", "2-D, missing middle", "exp(sin(πx) + y²)", 2, ((-1.0, 1.0), (-1.0, 1.0)),
+                 lambda x: np.exp(np.sin(np.pi * x[:, 0]) + x[:, 1] ** 2),
+                 "filling a square hole in a surface", gap=((-0.3, 0.3), (-0.3, 0.3))),
 }
 
 

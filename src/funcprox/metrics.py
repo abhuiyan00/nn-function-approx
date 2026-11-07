@@ -9,11 +9,12 @@ Array = np.ndarray
 
 
 def regression_metrics(y_hat: Array, y: Array, u: Array | None = None,
-                       edge: float = 0.9) -> dict:
+                       edge: float = 0.9, hidden: Array | None = None) -> dict:
     """RMSE, MAE, max error, R^2, NRMSE (= RMSE / std f) and edge/interior split.
 
     ``u`` are inputs scaled to [-1, 1]; a point is in the edge band when any
     coordinate has |u| > edge (outer 5 % of each side of the box).
+    ``hidden`` marks the points of the missing middle, reported on their own.
     """
     e = (y_hat - y).ravel()
     std = float(np.std(y))
@@ -30,6 +31,10 @@ def regression_metrics(y_hat: Array, y: Array, u: Array | None = None,
             out["rmse_edge"] = float(np.sqrt(np.mean(e[band] ** 2)))
             out["rmse_interior"] = float(np.sqrt(np.mean(e[~band] ** 2)))
             out["argmax_in_edge"] = bool(band[np.argmax(np.abs(e))])
+    if hidden is not None and hidden.any() and (~hidden).any():
+        out["rmse_gap"] = float(np.sqrt(np.mean(e[hidden] ** 2)))
+        out["rmse_seen"] = float(np.sqrt(np.mean(e[~hidden] ** 2)))
+        out["max_err_gap"] = float(np.max(np.abs(e[hidden])))
     return out
 
 
@@ -40,7 +45,7 @@ def predict_original(net, ds: Dataset, x: Array) -> Array:
 
 def evaluate(net, ds: Dataset) -> dict:
     y_hat = predict_original(net, ds, ds.x_test)
-    m = regression_metrics(y_hat, ds.y_test, ds.u_test)
+    m = regression_metrics(y_hat, ds.y_test, ds.u_test, hidden=ds.target.in_gap(ds.x_test))
     # validation error against noisy labels, original units (what a user without f sees)
     e_val = predict_original(net, ds, ds.x_val) - ds.y_val
     m["val_mse_noisy"] = float(np.mean(e_val ** 2))

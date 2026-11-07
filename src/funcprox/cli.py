@@ -4,6 +4,8 @@ Examples
     python -m funcprox targets
     python -m funcprox train --target f4 --hidden 32,32 --act tanh --out runs/f4.npz
     python -m funcprox train --target f7 --arch kan --widths 2,1,1 --grid 10 --grid-updates 25,75 --optimizer lm
+    python -m funcprox train --formula "x^3 - x" --domain=-1.5,1.5 --gap=-0.5,0.5 --optimizer lm --hidden 16,16
+    python -m funcprox train --points measured.csv --gap=-0.2,0.2
     python -m funcprox predict runs/f4.npz 0.0 0.5 1.0
     python -m funcprox ui
 """
@@ -17,8 +19,9 @@ import sys
 import numpy as np
 
 from . import serialize
+from .custom import make_target, saved_target
 from .data import make_dataset
-from .functions import TARGETS, get_target
+from .functions import TARGETS
 from .metrics import evaluate
 from .model import build_kan, build_mlp
 from .train import TrainConfig, fit
@@ -28,14 +31,44 @@ def _ints(s: str) -> list[int]:
     return [int(v) for v in s.split(",") if v.strip()]
 
 
+def _pairs(s: str) -> list[tuple[float, float]]:
+    """"-1,1,-2,2" means the ranges (-1, 1) and (-2, 2); an empty text means none."""
+    v = [float(part) for part in s.split(",") if part.strip()]
+    if len(v) % 2:
+        raise ValueError(f"{s!r} is not a list of from,to ranges")
+    return list(zip(v[::2], v[1::2]))
+
+
+def _function(a) -> dict:
+    """The arguments of make_target, kept with a saved model so it can be rebuilt."""
+    if a.formula is not None:
+        fn = dict(formula=a.formula)
+    elif a.points:
+        rows = np.atleast_2d(np.genfromtxt(a.points, delimiter=",", encoding="utf-8-sig"))
+        fn = dict(points=rows[np.isfinite(rows).all(axis=1)].tolist())  # a header line reads as NaN
+    else:
+        fn = dict(target=a.target)
+    if a.domain:
+        fn["domain"] = _pairs(a.domain)
+    if a.gap is not None:
+        fn["gap"] = _pairs(a.gap)
+    return fn
+
+
 def cmd_targets(_args) -> int:
     for t in TARGETS.values():
-        print(f"{t.key}  {t.name:<14} {t.formula:<45} domain={t.domain}  probes: {t.probes}")
+        hole = f"  missing middle: {t.gap}" if t.gap else ""
+        print(f"{t.key}  {t.name:<22} {t.formula:<45} domain={t.domain}  probes: {t.probes}{hole}")
     return 0
 
 
 def cmd_train(a) -> int:
-    target = get_target(a.target)
+    try:
+        function = _function(a)
+        target = make_target(**function)
+    except (ValueError, OSError) as exc:
+        print(f"Cannot use this function: {exc}", file=sys.stderr)
+        return 2
     ds = make_dataset(target, a.n_train, a.n_val, a.sigma, a.data_seed)
     if a.arch == "kan":
         net = build_kan(_ints(a.widths) if a.widths else [target.dim, 5, 1], a.grid, seed=a.seed)
@@ -53,7 +86,7 @@ def cmd_train(a) -> int:
              seconds=round(hist.wall[-1], 2) if hist.wall else 0.0)
     print(json.dumps(m, indent=2))
     if a.out:
-        serialize.save(a.out, net, ds.xs, ds.ys, meta=dict(target=a.target, metrics=m, train=cfg.to_dict()))
+        serialize.save(a.out, net, ds.xs, ds.ys, meta=dict(target=target.key, function=function, metrics=m, train=cfg.to_dict()))
         print(f"saved {a.out}")
     return 0
 
@@ -62,9 +95,9 @@ def cmd_predict(a) -> int:
     net, xs, ys, meta = serialize.load(a.model)
     x = np.array(a.x, dtype=float).reshape(-1, net.config.get("n_in", net.layers[0].n_in))
     y = ys.inverse(net.forward(xs.transform(x)))
-    target = get_target(meta["target"]) if "target" in meta else None
+    target = saved_target(meta)
     for xi, yi in zip(x, y.ravel()):
-        exact = f"   exact={float(target(xi.reshape(1, -1))[0, 0]):.6g}" if target else ""
+        exact = f"   exact={float(target(xi.reshape(1, -1))[0, 0]):.6g}" if target and target.known else ""
         print(f"x={xi.tolist()}  y_hat={yi:.6g}{exact}")
     return 0
 
@@ -89,6 +122,10 @@ def main(argv=None) -> int:
 
     t = sub.add_parser("train", help="train one network and report test metrics")
     t.add_argument("--target", default="f1")
+    t.add_argument("--formula", default=None, help='your own function of x (and y), e.g. "sin(3*x) * exp(-x^2)"')
+    t.add_argument("--points", default="", help="your own data: a CSV file with one x,y pair per line")
+    t.add_argument("--domain", default="", help="range of a formula, e.g. --domain=-2,2 or --domain=-1,1,-1,1 (default -1 to 1)")
+    t.add_argument("--gap", default=None, help="missing middle, no training data inside: --gap=-0.5,0.5 or --gap=-0.3,0.3,-0.3,0.3")
     t.add_argument("--arch", choices=["mlp", "kan"], default="mlp")
     t.add_argument("--hidden", default="32,32")
     t.add_argument("--act", default="tanh")
