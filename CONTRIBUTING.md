@@ -19,6 +19,7 @@ Types used here: `feat`, `fix`, `test`, `exp` (experiment scripts / results), `d
 ```bash
 pytest                                     # all tests green
 python experiments/<changed_exp>.py        # quick profile, check the figure
+npm --prefix ui test                       # if you changed the interface; more in ui/README.md
 ```
 
 ## Results and figures
@@ -29,7 +30,8 @@ python experiments/<changed_exp>.py        # quick profile, check the figure
 * Model files (`*.npz`) stay out of git (`.gitignore`).
 
 ## Code style
-* NumPy only in `src/fapprox` (Matplotlib only in `plotting.py`).
+* NumPy only in `src/fapprox` (Matplotlib only in `plotting.py`). Interface dependencies stay in
+  `src/fapprox_ui` and `ui/`; `src/fapprox` must keep working without them.
 * Every new layer gets a gradient test in `tests/test_engine.py`.
 * Docstring at the top of each experiment: question, variables, outputs.
 

@@ -91,3 +91,4 @@ Every row of every run is stored in `results/<exp>/*.csv` with its full spec.
 2. Put one run in one dict (`run_one` understands every key of `common.DEFAULTS`).
 3. Name figures `<exp>_<what>.png` via `fig(EXP, "what")` so `run_all.py` collects them.
 4. Add the name to `ORDER` in `run_all.py` and to the VS Code task list.
+5. Optional: describe its interactive chart in `ui/src/lib/experimentCharts.ts`. Without one, the interface still lists it, with its tables, figures and raw data.

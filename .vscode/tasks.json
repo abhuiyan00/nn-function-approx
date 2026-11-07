@@ -5,7 +5,23 @@
       "label": "tests",
       "type": "shell",
       "command": "python -m pytest",
-      "group": { "kind": "test", "isDefault": true }
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "interface: open",
+      "type": "shell",
+      "command": "python -m fapprox ui",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "interface: build frontend",
+      "type": "shell",
+      "command": "npm --prefix ui ci; npm --prefix ui run build",
+      "group": "build"
     },
     {
       "label": "experiments: quick profile",
@@ -32,9 +48,17 @@
       "type": "pickString",
       "description": "Experiment script",
       "options": [
-        "e0_sanity", "e1_architecture", "e2_activation_init", "e3_training",
-        "e4_data_noise", "e5_regularisation", "e6_baselines",
-        "u1_levenberg_marquardt", "u2_kan_vs_mlp", "u3_spectral_bias", "u4_uncertainty"
+        "e0_sanity",
+        "e1_architecture",
+        "e2_activation_init",
+        "e3_training",
+        "e4_data_noise",
+        "e5_regularisation",
+        "e6_baselines",
+        "u1_levenberg_marquardt",
+        "u2_kan_vs_mlp",
+        "u3_spectral_bias",
+        "u4_uncertainty"
       ]
     }
   ]

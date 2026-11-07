@@ -1,4 +1,4 @@
-"""Classical approximators used as yardsticks (all hand-written, NumPy only).
+"""Classical approximators used as yardsticks (implemented here, NumPy only).
 
 * Chebyshev least-squares polynomial (1-D; tensor product in 2-D)
 * Cubic B-spline least squares on a uniform grid (1-D; tensor product in 2-D)
