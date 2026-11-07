@@ -14,9 +14,9 @@ export function LossChart({ run, height = 280 }: { run: RunDetail; height?: numb
     return [
       { id: "train", label: "Training MSE", color: seriesColor(0), x: h.epoch, y: h.train },
       { id: "val", label: "Validation MSE", color: seriesColor(1), x: h.epoch, y: h.val },
-      { id: "test", label: "MSE against exact f", color: seriesColor(2), x: h.test_epoch.filter((e) => e > 0), y: h.test_mse.slice(h.test_epoch.length - h.test_epoch.filter((e) => e > 0).length), width: 1.5 },
+      { id: "test", label: run.grid.known === false ? "MSE on held-out points" : "MSE against exact f", color: seriesColor(2), x: h.test_epoch.filter((e) => e > 0), y: h.test_mse.slice(h.test_epoch.length - h.test_epoch.filter((e) => e > 0).length), width: 1.5 },
     ];
-  }, [run.history]);
+  }, [run.history, run.grid.known]);
   const best = run.final?.best_epoch;
   const vlines = useMemo(() => (best && best > 0 ? [{ x: best, label: `Best, epoch ${best}` }] : undefined), [best]);
   return (
@@ -119,7 +119,11 @@ export function BaselinesPanel({ run }: { run: RunDetail }) {
   const final = run.final;
   if (!final) return <EmptyState title="Available when training ends">The classical fits are computed once for the finished network.</EmptyState>;
   const net = final.metrics.rmse;
-  const rows = [{ model: `This network (${run.label})`, n: final.metrics.n_params, rmse: net, max: final.metrics.max_err, own: true }, ...final.baselines.map((b) => ({ model: b.model, n: b.n_coef, rmse: b.rmse, max: b.max_err, own: false }))];
+  const rows = [
+    { model: `This network (${run.label})`, n: final.metrics.n_params, rmse: net, max: final.metrics.max_err, hole: final.metrics.rmse_gap, own: true },
+    ...final.baselines.map((b) => ({ model: b.model, n: b.n_coef, rmse: b.rmse, max: b.max_err, hole: b.rmse_gap, own: false })),
+  ];
+  const hasHole = final.metrics.rmse_gap != null;
   const best = final.baselines.reduce((a, b) => (b.rmse < a.rmse ? b : a), final.baselines[0]);
   const verdict = net == null || !best ? null
     : best.rmse < net ? `${best.model} with ${best.n_coef.toLocaleString("en-US")} coefficients beats this network by ${factor(net / best.rmse)}.`
@@ -134,7 +138,8 @@ export function BaselinesPanel({ run }: { run: RunDetail }) {
             <tr>
               <th scope="col" className="px-3 py-2 font-medium">Approximator</th>
               <th scope="col" className="px-3 py-2 text-right font-medium">Fitted values</th>
-              <th scope="col" className="px-3 py-2 text-right font-medium">RMSE vs exact f</th>
+              <th scope="col" className="px-3 py-2 text-right font-medium">{run.grid.known === false ? "RMSE on held-out points" : "RMSE vs exact f"}</th>
+              {hasHole && <th scope="col" className="px-3 py-2 text-right font-medium">In the missing middle</th>}
               <th scope="col" className="px-3 py-2 text-right font-medium">Max error</th>
             </tr>
           </thead>
@@ -144,6 +149,7 @@ export function BaselinesPanel({ run }: { run: RunDetail }) {
                 <td className="px-3 py-1.5">{r.model}</td>
                 <td className="tnum px-3 py-1.5 text-right">{r.n.toLocaleString("en-US")}</td>
                 <td className="tnum px-3 py-1.5 text-right">{sci(r.rmse)}</td>
+                {hasHole && <td className="tnum px-3 py-1.5 text-right">{sci(r.hole)}</td>}
                 <td className="tnum px-3 py-1.5 text-right">{sci(r.max)}</td>
               </tr>
             ))}

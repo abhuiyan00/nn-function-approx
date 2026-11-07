@@ -49,6 +49,20 @@ describe("cliCommand", () => {
     expect(cliCommand({ ...defaultSpec, target: "f7", arch: "kan", widths: [2, 1, 1], grid: 10, grid_updates: [25, 75], optimizer: "lm" }))
       .toBe("python -m funcprox train --target f7 --arch kan --widths 2,1,1 --grid 10 --grid-updates 25,75 --optimizer lm");
   });
+  it("writes a formula and its ranges so that a leading minus survives the shell", () => {
+    expect(cliCommand({ ...defaultSpec, target: "custom", formula: "x^3 - x", domain: [[-1.5, 1.5]], gap: [[-0.5, 0.5]] }))
+      .toBe('python -m funcprox train --formula="x^3 - x" --domain=-1.5,1.5 --gap=-0.5,0.5');
+  });
+  it("gives both ranges of a surface", () => {
+    expect(cliCommand({ ...defaultSpec, formula: "x*y", domain: [[0, 1], [2, 3]] }))
+      .toBe('python -m funcprox train --formula="x*y" --domain=0,1,2,3');
+  });
+  it("names a file for measured points", () => {
+    expect(cliCommand({ ...defaultSpec, target: "custom", points: [[0, 1]] })).toBe("python -m funcprox train --points points.csv");
+  });
+  it("can remove the hole of a built-in target", () => {
+    expect(cliCommand({ ...defaultSpec, target: "m1", gap: [] })).toBe("python -m funcprox train --target m1 --gap=");
+  });
 });
 
 describe("aggregate", () => {

@@ -3,23 +3,50 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
-from funcprox.functions import TARGETS
+from funcprox.custom import make_target
+from funcprox.functions import Target
 from funcprox.model import kan_param_count, mlp_param_count
 
 MAX_PARAMS = 200_000
 MAX_PARAMS_LM = 1_500  # LM solves a P x P system every iteration
+MAX_POINTS = 5_000
 Width = Annotated[int, Field(ge=1, le=512)]
 Seed = Annotated[int, Field(ge=0, le=2 ** 31 - 1)]
+Range = tuple[float, float]
 MODEL_NAME = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"  # one path component, never hidden
 
 
-class RunSpec(BaseModel):
-    """One training run; fields mirror ``python -m funcprox train``."""
+class FunctionSpec(BaseModel):
+    """What to approximate: a built-in target, a formula or points, with an optional missing middle."""
     model_config = ConfigDict(extra="forbid")
 
     target: str = "f1"
+    formula: str | None = None
+    domain: list[Range] | None = Field(None, max_length=2)
+    points: list[Range] | None = Field(None, max_length=MAX_POINTS)
+    gap: list[Range] | None = Field(None, max_length=2)  # null keeps the target's own hole, empty removes it
+    _made: Target = PrivateAttr()
+
+    @model_validator(mode="after")
+    def _resolve(self):
+        self._made = make_target(**self.function_fields())
+        self.target = self._made.key
+        return self
+
+    def function_fields(self) -> dict:
+        fields = dict(target=self.target, formula=self.formula, domain=self.domain, points=self.points, gap=self.gap)
+        return {k: v for k, v in fields.items() if v is not None}
+
+    @property
+    def resolved(self) -> Target:
+        return self._made
+
+
+class RunSpec(FunctionSpec):
+    """One training run; fields mirror ``python -m funcprox train``."""
+
     arch: Literal["mlp", "kan"] = "mlp"
     hidden: list[Width] = Field(default=[32, 32], min_length=1, max_length=6)
     act: Literal["tanh", "sigmoid", "relu", "silu", "sine"] = "tanh"
@@ -44,9 +71,7 @@ class RunSpec(BaseModel):
 
     @model_validator(mode="after")
     def _consistent(self):
-        target = TARGETS.get(self.target)
-        if target is None:
-            raise ValueError(f"unknown target {self.target!r}; choose from {sorted(TARGETS)}")
+        target = self.resolved
         if self.arch == "kan":
             self.widths = self.widths or [target.dim, 5, 1]
             if self.widths[0] != target.dim:
@@ -86,6 +111,15 @@ class SaveRequest(BaseModel):
 
 class PredictRequest(BaseModel):
     inputs: list[list[float]] = Field(min_length=1, max_length=10_000)
+
+
+class SearchRequest(BaseModel):
+    """Find the closest curve: ``base`` gives the function and the data, the panel of models is fixed."""
+    model_config = ConfigDict(extra="forbid")
+
+    base: RunSpec
+    effort: Literal["quick", "thorough"] = "quick"
+    seeds: int = Field(1, ge=1, le=5)
 
 
 class JobRequest(BaseModel):

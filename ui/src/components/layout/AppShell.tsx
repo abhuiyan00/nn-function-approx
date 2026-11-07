@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { BookOpenText, Boxes, ChartScatter, FlaskConical, LayoutDashboard, ListChecks, Menu, Moon, Sun, Terminal } from "lucide-react";
+import { BookOpenText, Boxes, ChartScatter, FlaskConical, LayoutDashboard, ListChecks, Menu, Moon, Spline, Sun, Terminal } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { to: "/", label: "Overview", icon: LayoutDashboard, end: true },
+  { to: "/finder", label: "Curve Finder", icon: Spline },
   { to: "/lab", label: "Training Lab", icon: FlaskConical },
   { to: "/experiments", label: "Experiments", icon: ListChecks },
   { to: "/explorer", label: "Run Explorer", icon: ChartScatter },

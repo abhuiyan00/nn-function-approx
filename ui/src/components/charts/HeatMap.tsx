@@ -14,12 +14,14 @@ interface Props {
   domain?: [number, number];
   height?: number;
   dots?: { x: number[]; y: number[] };
+  /** The missing middle, outlined: [[x from, x to], [y from, y to]]. */
+  gap?: [number, number][] | null;
 }
 
 const MARGIN = { top: 4, right: 8, bottom: 28, left: 36 };
 
 /** One function value per pixel of a small canvas, which the browser smooths when scaling up. */
-export function HeatMap({ title, x, y, values, kind = "sequential", domain, height = 260, dots }: Props) {
+export function HeatMap({ title, x, y, values, kind = "sequential", domain, height = 260, dots, gap }: Props) {
   const { theme } = useTheme();
   const { ref, width } = useSize<HTMLDivElement>();
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -105,6 +107,9 @@ export function HeatMap({ title, x, y, values, kind = "sequential", domain, heig
             <svg width={width} height={height} aria-hidden="true" className="pointer-events-none absolute inset-0">
               <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
                 {dots?.x.map((px, k) => <circle key={k} cx={sx(px)} cy={sy(dots.y[k])} r={1} fill="var(--foreground)" opacity={0.25} />)}
+                {gap?.length === 2 && (
+                  <rect x={sx(gap[0][0])} y={sy(gap[1][1])} width={sx(gap[0][1]) - sx(gap[0][0])} height={sy(gap[1][0]) - sy(gap[1][1])} fill="none" stroke="var(--foreground)" strokeWidth={1.5} strokeDasharray="4 3" />
+                )}
                 {ticksOf("linear", [x[0], x[nx - 1]], plotW * 1.2).map((t) => (
                   <text key={t} x={sx(t)} y={plotH + 15} textAnchor="middle" className="tnum fill-subtle text-[11px]">{tickLabel("linear", t)}</text>
                 ))}

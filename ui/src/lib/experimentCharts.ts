@@ -26,6 +26,7 @@ export interface ChartSpec {
 
 const TEST_RMSE = "Test RMSE vs exact f";
 const TARGET_NAMES = { f1: "f1 · sin 2πx", f4: "f4 · Runge", f5: "f5 · Franke", f6: "f6 · |x|", f7: "f7 · exp(sin πx + y²)" };
+const HOLE_NAMES = { m1: "m1 · sine", m2: "m2 · hidden peak", m3: "m3 · hidden kink", m4: "m4 · cubic", m5: "m5 · surface" };
 
 export const EXPERIMENT_CHARTS: Record<string, ChartSpec[]> = {
   e0: [{
@@ -66,6 +67,15 @@ export const EXPERIMENT_CHARTS: Record<string, ChartSpec[]> = {
     id: "scaling", title: "Networks against classical approximators at equal size", note: "Network curves are medians over seeds. Classical fits are deterministic.",
     dataset: "runs", kind: "line", x: "n_params", y: "rmse", color: "model", facet: "target", xScale: "log", yScale: "log",
     xLabel: "Parameters or coefficients", yLabel: TEST_RMSE, names: TARGET_NAMES,
+  }],
+  e7: [{
+    id: "hole-clean", title: "Error inside the hole against its width, no noise", note: "Median over seeds. No training or validation point falls inside the hole.",
+    dataset: "runs", kind: "line", x: "gap_pct", y: "rmse_gap", color: "model", facet: "target", where: { sigma: [0] }, yScale: "log",
+    xLabel: "Hole width, % of each axis", yLabel: "RMSE inside the hole", names: HOLE_NAMES,
+  }, {
+    id: "hole-noisy", title: "The same with noise σ = 0.05", note: "With noise, high-order fits lose their exact recovery of the hole.",
+    dataset: "runs", kind: "line", x: "gap_pct", y: "rmse_gap", color: "model", facet: "target", where: { sigma: [0.05] }, yScale: "log",
+    xLabel: "Hole width, % of each axis", yLabel: "RMSE inside the hole", names: HOLE_NAMES,
   }],
   u1: [{
     id: "methods", title: "The same network with three training methods", note: "2 × 16 tanh. One dot per seed; the tick marks the median.",

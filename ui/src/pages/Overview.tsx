@@ -15,6 +15,7 @@ import { daysUntil, factor, integer, percent, sci, shortDate } from "@/lib/forma
 function Preview({ grid }: { grid: Grid }) {
   const { theme } = useTheme();
   const canvas = useRef<HTMLCanvasElement>(null);
+  const exact = grid.exact as number[]; // the targets of this page are defined everywhere
 
   useEffect(() => {
     if (grid.kind !== "2d") return;
@@ -22,32 +23,34 @@ function Preview({ grid }: { grid: Grid }) {
     if (!ctx) return;
     const nx = grid.x.length;
     const ny = grid.y.length;
-    const lo = Math.min(...grid.exact);
-    const hi = Math.max(...grid.exact);
+    const lo = Math.min(...exact);
+    const hi = Math.max(...exact);
     const colour = sequentialRamp(theme);
     const image = ctx.createImageData(nx, ny);
     for (let i = 0; i < nx; i++) {
       for (let j = 0; j < ny; j++) {
         const p = ((ny - 1 - j) * nx + i) * 4;
-        const [r, g, b] = colour((grid.exact[i * ny + j] - lo) / (hi - lo || 1));
+        const [r, g, b] = colour((exact[i * ny + j] - lo) / (hi - lo || 1));
         image.data.set([r, g, b, 255], p);
       }
     }
     ctx.putImageData(image, 0, 0);
-  }, [grid, theme]);
+  }, [grid, exact, theme]);
 
   if (grid.kind === "2d") {
     return <canvas ref={canvas} width={grid.x.length} height={grid.y.length} aria-hidden="true" className="h-16 w-full rounded-sm" />;
   }
-  const lo = Math.min(...grid.exact);
-  const hi = Math.max(...grid.exact);
+  const lo = Math.min(...exact);
+  const hi = Math.max(...exact);
   const x0 = grid.x[0];
   const x1 = grid.x[grid.x.length - 1];
+  const place = (x: number) => ((x - x0) / (x1 - x0)) * 200;
   const d = grid.x
-    .map((x, i) => `${i ? "L" : "M"}${(((x - x0) / (x1 - x0)) * 200).toFixed(1)},${(58 - ((grid.exact[i] - lo) / (hi - lo || 1)) * 52).toFixed(1)}`)
+    .map((x, i) => `${i ? "L" : "M"}${place(x).toFixed(1)},${(58 - ((exact[i] - lo) / (hi - lo || 1)) * 52).toFixed(1)}`)
     .join("");
   return (
     <svg viewBox="0 0 200 64" preserveAspectRatio="none" aria-hidden="true" className="h-16 w-full">
+      {grid.gap && <rect x={place(grid.gap[0][0])} y={0} width={place(grid.gap[0][1]) - place(grid.gap[0][0])} height={64} fill="var(--wash)" />}
       <path d={d} fill="none" stroke="var(--series-1)" strokeWidth="1.75" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
     </svg>
   );
@@ -171,7 +174,12 @@ export function Overview() {
       <PageHeader
         title="Neural network as a device for function approximation"
         description="A from-scratch NumPy engine learns unknown functions from samples. Every result here is scored against the exact function, so real approximation quality is not confused with fitting the noise."
-        actions={<Button asChild><Link to="/lab">Open the Training Lab <ArrowRight /></Link></Button>}
+        actions={(
+          <>
+            <Button asChild><Link to="/finder">Find a curve <ArrowRight /></Link></Button>
+            <Button variant="outline" asChild><Link to="/lab">Open the Training Lab</Link></Button>
+          </>
+        )}
       />
 
       {quick > 0 && (
@@ -180,7 +188,7 @@ export function Overview() {
           title={`${quick} of ${Object.values(data.profiles).reduce((a, b) => a + b, 0)} experiments have quick-profile results only`}
           action={<Button variant="outline" size="sm" asChild><Link to="/runner">Open the runner</Link></Button>}
         >
-          Two seeds and 2,000 points. The full profile must confirm these numbers before they go into the report.
+          Few seeds and at most 2,000 points. The full profile must confirm these numbers before they go into the report.
         </Notice>
       )}
 
@@ -201,7 +209,7 @@ export function Overview() {
       {e6.data && <RunsChart spec={EXPERIMENT_CHARTS.e6[0]} data={e6.data} />}
 
       <Section title="Target functions" description="Each one tests one property of neural approximation. Open one in the lab to train on it.">
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-6">
           {targets.data?.map((t) => (
             <li key={t.key}>
               <Link to={`/lab?target=${t.key}`} className="group flex h-full flex-col gap-1.5 rounded-lg border bg-card p-3 transition-colors hover:border-axis">

@@ -17,7 +17,8 @@ const NONE = "__none";
 const MAX_FILTERS = 6;
 const MAX_SERIES = 8;
 const PREFERRED_Y = ["rmse", "error", "rel_error", "coverage", "spread"];
-const PREFERRED_X = ["n_params", "n_train", "step", "lr", "nominal", "seconds"];
+const PREFERRED_X = ["gap_pct", "n_params", "n_train", "step", "lr", "nominal", "seconds"];
+const FILTERS_FIRST = ["target", "sigma"]; // a result file can have more columns than there is room for filters
 const PREFERRED_COLOR = ["model", "method", "variant", "act", "optimizer", "depth", "sigma", "check", "k", "score"];
 
 function Control({ label, children, htmlFor }: { label: string; children: React.ReactNode; htmlFor: string }) {
@@ -67,7 +68,10 @@ export function Explorer() {
   const logX = params.get("logx") != null ? params.get("logx") === "1" : x === "n_params" || x === "n_train" || x === "lr";
   const logY = params.get("logy") != null ? params.get("logy") === "1" : /rmse|err|mse|max/.test(y);
 
-  const filterColumns = useMemo(() => seriesChoices.filter((c) => c.name !== color).slice(0, MAX_FILTERS), [seriesChoices, color]);
+  const filterColumns = useMemo(() => {
+    const later = (c: DatasetColumn) => (FILTERS_FIRST.includes(c.name) ? 0 : 1);
+    return seriesChoices.filter((c) => c.name !== color).sort((a, b) => later(a) - later(b)).slice(0, MAX_FILTERS);
+  }, [seriesChoices, color]);
   const filterValue = (c: DatasetColumn) => params.get(`f.${c.name}`) ?? (c.name === "target" ? String(c.values![0]) : ANY); // medians across different functions mean nothing, so start on one
   const filters = useMemo(() => filterColumns.flatMap((c) => {
     const value = filterValue(c);

@@ -18,7 +18,7 @@ import numpy as np
 from funcprox import bspline
 from funcprox.baselines import ChebyshevLS, SplineLS
 from funcprox.data import make_dataset
-from funcprox.functions import Target, get_target
+from funcprox.functions import Target
 from funcprox.layers import KANLayer
 from funcprox.metrics import evaluate, regression_metrics
 from funcprox.model import Network, build_kan, build_mlp
@@ -32,6 +32,7 @@ MAX_SAMPLES = 256         # training points drawn on the fit chart
 MAX_LIVE_EDGES = 24       # KAN edge functions per snapshot
 MIN_SNAPSHOT_S = 0.1
 MAX_KEPT_RUNS = 40
+PREVIEW_SAMPLES = 150
 # The size sweeps of experiment E6, as (name, model, sizes, coefficients of a size).
 # Least squares on random points turns unstable far beyond these: degree 256 on 2,000 points gives RMSE 2e3 on |x|.
 BASELINES = {
@@ -63,15 +64,32 @@ def clean(o):
 
 def make_grid(target: Target, n1: int = GRID_1D, n2: int = GRID_2D) -> tuple[np.ndarray, dict]:
     """Display grid. In 1-D it also covers the extrapolation zone, if the target has one."""
+    extra = dict(gap=[list(g) for g in target.gap] if target.gap else None, known=target.known)
     if target.dim == 1:
         lo, hi = (target.extrapolation_domain or target.domain)[0]
         x = np.linspace(lo, hi, n1).reshape(-1, 1)
-        return x, dict(kind="1d", x=round_array(x), exact=round_array(target(x)), box=list(target.domain[0]))
+        return x, dict(kind="1d", x=round_array(x), exact=round_array(target(x)), box=list(target.domain[0]), **extra)
     axes = [np.linspace(lo, hi, n2) for lo, hi in target.domain]
     mesh = np.meshgrid(*axes, indexing="ij")
     x = np.stack([m.ravel() for m in mesh], axis=1)
     return x, dict(kind="2d", x=round_array(axes[0]), y=round_array(axes[1]), exact=round_array(target(x)),
-                   box=[list(d) for d in target.domain])
+                   box=[list(d) for d in target.domain], **extra)
+
+
+def samples_of(ds, limit: int = MAX_SAMPLES) -> dict:
+    """Training points as the charts draw them: (x, y) in 1-D, input positions in 2-D."""
+    x, y = ds.x_train[:limit], ds.y_train[:limit]
+    if ds.target.dim == 1:
+        return dict(x=round_array(x, 5), y=round_array(y, 5))
+    return dict(x=round_array(x[:, 0], 5), y=round_array(x[:, 1], 5))
+
+
+def preview(target: Target) -> dict:
+    """What a function looks like before training, and where its data will fall."""
+    _, grid = make_grid(target, n1=320, n2=36)
+    grid["exact"] = round_array(grid["exact"], 4)
+    ds = make_dataset(target, PREVIEW_SAMPLES, 5, n_test=2)
+    return clean(dict(key=target.key, formula=target.formula, dim=target.dim, grid=grid, samples=samples_of(ds, PREVIEW_SAMPLES)))
 
 
 def build_network(spec: RunSpec, dim: int) -> Network:
@@ -122,11 +140,12 @@ def kan_edges(net: Network, u: np.ndarray, target_key: str, n: int = 64) -> list
     return edges
 
 
-def matched_baselines(ds, n_params: int) -> list[dict]:
+def matched_baselines(ds, n_params: int, u_curve: np.ndarray | None = None) -> list[dict]:
     """Best Chebyshev and cubic-spline fit no larger than the network.
 
     The size is chosen on the validation points, the same rule that picks the network's best
     weights, so neither side sees the exact function before it is scored.
+    ``u_curve`` adds the predictions at these scaled inputs to each row.
     """
     budget = min(n_params, len(ds.x_train) // 2)
     out = []
@@ -141,9 +160,13 @@ def matched_baselines(ds, n_params: int) -> list[dict]:
                 continue  # one unsolvable size must not cost the finished run its results
             fits.append((float(np.mean((model.predict(ds.u_val) - ds.y_val) ** 2)), model))
         if fits:
-            best = min(fits, key=lambda fit: fit[0])[1]
-            m = regression_metrics(best.predict(ds.u_test), ds.y_test, ds.u_test)
-            out.append(dict(model=name, n_coef=best.n_coef, rmse=m["rmse"], max_err=m["max_err"]))
+            val_mse, best = min(fits, key=lambda fit: fit[0])
+            m = regression_metrics(best.predict(ds.u_test), ds.y_test, ds.u_test, hidden=ds.target.in_gap(ds.x_test))
+            row = dict(model=name, n_coef=best.n_coef, rmse=m["rmse"], max_err=m["max_err"], val_mse=val_mse,
+                       rmse_gap=m.get("rmse_gap"), rmse_seen=m.get("rmse_seen"))
+            if u_curve is not None:
+                row["pred"] = round_array(best.predict(u_curve))
+            out.append(row)
     return out
 
 
@@ -151,7 +174,7 @@ class LabRun:
     def __init__(self, spec: RunSpec):
         self.id = uuid.uuid4().hex[:10]
         self.spec = spec
-        self.target = get_target(spec.target)
+        self.target = spec.resolved
         self.created = time.time()
         self.status = "queued"
         self.error: str | None = None
@@ -171,18 +194,14 @@ class LabRun:
         self.grid_x, self.grid = make_grid(self.target)
         self.u_grid = self.xs.transform(self.grid_x)
         self.exact = self.target(self.grid_x).ravel()
-        self.inside = np.all((self.grid_x >= self.xs.lo) & (self.grid_x <= self.xs.hi), axis=1)
+        self.inside = np.all((self.grid_x >= self.xs.lo) & (self.grid_x <= self.xs.hi), axis=1) & np.isfinite(self.exact)
+        scored = self.grid_x[self.inside] if self.target.known else self.ds.x_test
+        self.score_hidden = self.target.in_gap(scored)
         self.u_sample = self.ds.u_train[:MAX_SAMPLES]
-        self.samples = self._samples()
+        self.samples = samples_of(self.ds)
         self._prepare_spectrum()
 
     # ---------------------------------------------------------------- preparation
-    def _samples(self) -> dict:
-        x, y = self.ds.x_train[:MAX_SAMPLES], self.ds.y_train[:MAX_SAMPLES]
-        if self.target.dim == 1:
-            return dict(x=round_array(x, 5), y=round_array(y, 5))
-        return dict(x=round_array(x[:, 0], 5), y=round_array(x[:, 1], 5))
-
     def _prepare_spectrum(self) -> None:
         self.u_spec = self.basis = self.amps = None
         self.grid["spectrum_exact"] = None
@@ -190,8 +209,10 @@ class LabRun:
             return
         lo, hi = self.target.domain[0]
         xs = np.linspace(lo, hi, SPECTRUM_POINTS, endpoint=False).reshape(-1, 1)  # periodic grid: bin k = k cycles
-        self.u_spec = self.xs.transform(xs)
         fx = self.target(xs).ravel()
+        if not np.isfinite(fx).all():  # no frequency content to compare with where the function has holes
+            return
+        self.u_spec = self.xs.transform(xs)
         self.grid["spectrum_exact"] = round_array(self._amplitudes(fx), 5)
         if self.target.frequencies:
             self.basis = np.stack([np.sin(k * np.pi * xs[:, 0]) for k in self.target.frequencies], axis=1)
@@ -208,11 +229,17 @@ class LabRun:
     def _snapshot(self, epoch: int, record: bool = True) -> dict:
         pred = self._predict(self.u_grid)
         residual = pred - self.exact
-        inner = residual[self.inside]
-        std = float(np.std(self.exact[self.inside]))
+        if self.target.known:
+            inner, truth = residual[self.inside], self.exact[self.inside]
+        else:  # measured data: the held-out points stand in for the exact function
+            truth = self.ds.y_test.ravel()
+            inner = self._predict(self.ds.u_test) - truth
+        std = float(np.std(truth))
         mse = float(np.mean(inner * inner))
+        hole = inner[self.score_hidden]
         snap = dict(epoch=epoch, pred=round_array(pred), residual=round_array(residual, 4),
                     rmse=math.sqrt(mse) if math.isfinite(mse) else None,
+                    rmse_gap=math.sqrt(float(np.mean(hole * hole))) if hole.size and np.isfinite(hole).all() else None,
                     max_err=float(np.max(np.abs(inner))),
                     r2=1.0 - mse / (std * std) if std > 0 else None,
                     spectrum=None, edges=kan_edges(self.net, self.u_sample, self.target.key))
@@ -345,6 +372,10 @@ class LabManager:
         self.runs: OrderedDict[str, LabRun] = OrderedDict()
         self._lock = threading.Lock()
         self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="lab")
+
+    def run_after_queue(self, work) -> None:
+        """``work`` runs once everything queued so far has finished."""
+        self._pool.submit(work)
 
     def submit(self, spec: RunSpec) -> LabRun:
         run = LabRun(spec)

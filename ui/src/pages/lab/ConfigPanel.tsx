@@ -1,126 +1,18 @@
 import { Copy, Play, Square } from "lucide-react";
-import { type ReactNode, useEffect, useId, useState } from "react";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { Notice, Segmented } from "@/components/common";
+import { ListField, NumberField, SelectField } from "@/components/fields";
+import { FunctionPicker, MissingMiddle } from "@/components/FunctionPicker";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { Activation, Optimizer, RunSpec, Target } from "@/lib/api";
+import type { Activation, FunctionPreview, Optimizer, RunSpec, Target } from "@/lib/api";
 import { integer } from "@/lib/format";
-import { type SpecErrors, cliCommand, defaultSpec, paramCount, parseIntList } from "@/lib/runs";
+import { boxOf, functionDim } from "@/lib/functions";
+import { type SpecErrors, cliCommand, defaultSpec, paramCount } from "@/lib/runs";
 
 type ModelKind = "mlp" | "fourier" | "siren" | "kan";
 
 const kindOf = (s: RunSpec): ModelKind => (s.arch === "kan" ? "kan" : s.act === "sine" ? "siren" : s.fourier_m ? "fourier" : "mlp");
-
-function Field({ label, help, error, children, htmlFor }: { label: string; help?: ReactNode; error?: string; children: ReactNode; htmlFor: string }) {
-  return (
-    <div className="min-w-0 space-y-1">
-      <Label htmlFor={htmlFor} className="text-xs font-medium text-muted-foreground">{label}</Label>
-      {children}
-      {error ? <p id={`${htmlFor}-error`} className="text-xs text-critical-ink">{error}</p> : help && <p className="text-xs text-subtle">{help}</p>}
-    </div>
-  );
-}
-
-/** Keeps the text as typed, so "1e-" or an empty box can exist on the way to a valid number. */
-function NumberField({ label, value, onChange, min, max, help, integerOnly }: {
-  label: string;
-  value: number;
-  onChange: (value: number) => void;
-  min?: number;
-  max?: number;
-  help?: ReactNode;
-  integerOnly?: boolean;
-}) {
-  const id = useId();
-  const [text, setText] = useState(String(value));
-  const parsed = Number(text);
-  const ok = text.trim() !== "" && Number.isFinite(parsed) && (!integerOnly || Number.isInteger(parsed)) && (min == null || parsed >= min) && (max == null || parsed <= max);
-
-  useEffect(() => {
-    if (Number(text) !== value) setText(String(value));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
-
-  const range = min != null && max != null ? `${integerOnly ? "A whole number" : "A number"} from ${min} to ${max}.` : "Enter a number.";
-  return (
-    <Field label={label} help={help} error={ok ? undefined : range} htmlFor={id}>
-      <Input
-        id={id}
-        type="text"
-        inputMode={integerOnly ? "numeric" : "decimal"}
-        value={text}
-        aria-invalid={!ok}
-        aria-describedby={ok ? undefined : `${id}-error`}
-        className="tnum h-8"
-        onChange={(event) => {
-          setText(event.target.value);
-          const v = Number(event.target.value);
-          if (event.target.value.trim() !== "" && Number.isFinite(v) && (!integerOnly || Number.isInteger(v)) && (min == null || v >= min) && (max == null || v <= max)) onChange(v);
-        }}
-      />
-    </Field>
-  );
-}
-
-function ListField({ label, value, onChange, help, error, allowEmpty }: {
-  label: string;
-  value: number[];
-  onChange: (value: number[]) => void;
-  help?: ReactNode;
-  error?: string;
-  allowEmpty?: boolean;
-}) {
-  const id = useId();
-  const [text, setText] = useState(value.join(","));
-  const parsed = parseIntList(text);
-  const ok = parsed != null || (allowEmpty && text.trim() === "");
-
-  useEffect(() => {
-    if ((parsed ?? []).join() !== value.join()) setText(value.join(","));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
-
-  return (
-    <Field label={label} help={help} error={error ?? (ok ? undefined : "Use positive whole numbers, such as 16,16 or 3x64.")} htmlFor={id}>
-      <Input
-        id={id}
-        value={text}
-        aria-invalid={!ok || !!error}
-        aria-describedby={!ok || error ? `${id}-error` : undefined}
-        className="tnum h-8"
-        onChange={(event) => {
-          setText(event.target.value);
-          const v = parseIntList(event.target.value);
-          if (v) onChange(v);
-          else if (allowEmpty && event.target.value.trim() === "") onChange([]);
-        }}
-      />
-    </Field>
-  );
-}
-
-function SelectField<T extends string>({ label, value, onChange, options, help }: {
-  label: string;
-  value: T;
-  onChange: (value: T) => void;
-  options: { value: T; label: string }[];
-  help?: ReactNode;
-}) {
-  const id = useId();
-  return (
-    <Field label={label} help={help} htmlFor={id}>
-      <Select value={value} onValueChange={(v) => onChange(v as T)}>
-        <SelectTrigger id={id} size="sm" className="w-full"><SelectValue /></SelectTrigger>
-        <SelectContent>
-          {options.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-        </SelectContent>
-      </Select>
-    </Field>
-  );
-}
 
 function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -145,35 +37,38 @@ const OPTIMIZERS: { value: Optimizer; label: string }[] = [
   { value: "lm", label: "Levenberg-Marquardt" },
 ];
 
-export function ConfigPanel({ spec, onChange, targets, errors, serverError, running, onStart, onStop }: {
+export function ConfigPanel({ spec, onChange, targets, preview, functionError, checking, errors, serverError, running, onStart, onStop }: {
   spec: RunSpec;
   onChange: (spec: RunSpec) => void;
   targets: Target[];
+  preview: FunctionPreview | undefined;
+  functionError: string | null;
+  checking: boolean;
   errors: SpecErrors;
   serverError: string | null;
   running: boolean;
   onStart: () => void;
   onStop: () => void;
 }) {
-  const target = targets.find((t) => t.key === spec.target) ?? targets[0];
+  const dim = functionDim(spec, targets);
   const set = (patch: Partial<RunSpec>) => onChange({ ...spec, ...patch });
   const kind = kindOf(spec);
   const lm = spec.optimizer === "lm";
-  const invalid = Object.keys(errors).length > 0;
+  const invalid = Object.keys(errors).length > 0 || !!functionError || checking;
 
   const setKind = (next: ModelKind) => {
     const hidden = spec.hidden;
     const base = { grid_updates: [] as number[] };
-    if (next === "kan") return set({ arch: "kan", widths: [target.dim, 5, 1], grid: 10, grid_updates: [25, 75], fourier_m: 0, act: "tanh", bias_init: null });
+    if (next === "kan") return set({ arch: "kan", widths: [dim, 5, 1], grid: 10, grid_updates: [25, 75], fourier_m: 0, act: "tanh", bias_init: null });
     if (next === "siren") return set({ ...base, arch: "mlp", widths: null, act: "sine", fourier_m: 0, bias_init: null, hidden });
     if (next === "fourier") return set({ ...base, arch: "mlp", widths: null, act: spec.act === "sine" ? "tanh" : spec.act, fourier_m: 32, fourier_scale: 4, bias_init: null, hidden });
     return set({ ...base, arch: "mlp", widths: null, act: spec.act === "sine" ? "tanh" : spec.act, fourier_m: 0, hidden });
   };
 
-  const setTarget = (key: string) => {
-    const dim = targets.find((t) => t.key === key)?.dim ?? 1;
-    const widths = spec.arch === "kan" && spec.widths ? [dim, ...spec.widths.slice(1)] : spec.widths;
-    set({ target: key, widths });
+  const setFunction = (patch: Partial<RunSpec>) => {
+    const next = { ...spec, ...patch };
+    const inputs = functionDim(next, targets);
+    set({ ...patch, widths: spec.arch === "kan" && spec.widths ? [inputs, ...spec.widths.slice(1)] : spec.widths });
   };
 
   const setOptimizer = (optimizer: Optimizer) =>
@@ -201,13 +96,8 @@ export function ConfigPanel({ spec, onChange, targets, errors, serverError, runn
     >
       <div className="space-y-3 p-3">
         <Group title="Target function">
-          <SelectField
-            label="Function to approximate"
-            value={spec.target}
-            onChange={setTarget}
-            options={targets.map((t) => ({ value: t.key, label: `${t.key} · ${t.formula.length > 26 ? t.name : t.formula}` }))}
-            help={`Tests: ${target.probes}.`}
-          />
+          <FunctionPicker spec={spec} targets={targets} error={functionError} onChange={setFunction} />
+          {preview && <MissingMiddle box={boxOf(preview.grid)} gap={preview.grid.gap} onChange={(gap) => set({ gap })} />}
         </Group>
 
         <Group title="Network">
@@ -226,7 +116,7 @@ export function ConfigPanel({ spec, onChange, targets, errors, serverError, runn
             <ListField label="Hidden layers" value={spec.hidden} onChange={(hidden) => set({ hidden })} error={errors.hidden} help="Units per layer: 16,16 or 3x64." />
           ) : (
             <>
-              <ListField label="Layer widths" value={spec.widths ?? [target.dim, 5, 1]} onChange={(widths) => set({ widths })} error={errors.widths} help={`From the ${target.dim} input${target.dim > 1 ? "s" : ""} to 1 output.`} />
+              <ListField label="Layer widths" value={spec.widths ?? [dim, 5, 1]} onChange={(widths) => set({ widths })} error={errors.widths} help={`From the ${dim} input${dim > 1 ? "s" : ""} to 1 output.`} />
               <div className="grid grid-cols-2 gap-2">
                 <NumberField label="Grid size G" value={spec.grid} min={2} max={64} integerOnly onChange={(grid) => set({ grid })} />
                 <ListField label="Grid updates at" value={spec.grid_updates} allowEmpty onChange={(grid_updates) => set({ grid_updates })} />
@@ -270,11 +160,16 @@ export function ConfigPanel({ spec, onChange, targets, errors, serverError, runn
 
         <Group title="Data">
           <div className="grid grid-cols-2 gap-2">
-            <NumberField label="Training points" value={spec.n_train} min={10} max={20000} integerOnly onChange={(n_train) => set({ n_train })} />
-            <NumberField label="Validation points" value={spec.n_val} min={5} max={5000} integerOnly onChange={(n_val) => set({ n_val })} />
-            <NumberField label="Noise σ" value={spec.sigma} min={0} max={5} onChange={(sigma) => set({ sigma })} />
+            {spec.points == null && (
+              <>
+                <NumberField label="Training points" value={spec.n_train} min={10} max={20000} integerOnly onChange={(n_train) => set({ n_train })} />
+                <NumberField label="Validation points" value={spec.n_val} min={5} max={5000} integerOnly onChange={(n_val) => set({ n_val })} />
+                <NumberField label="Noise σ" value={spec.sigma} min={0} max={5} onChange={(sigma) => set({ sigma })} />
+              </>
+            )}
             <NumberField label="Model seed" value={spec.seed} min={0} max={2147483647} integerOnly onChange={(seed) => set({ seed })} />
           </div>
+          {spec.points != null && <p className="text-xs text-subtle">A fifth of your points is held out for validation and scoring.</p>}
         </Group>
       </div>
 
@@ -282,7 +177,7 @@ export function ConfigPanel({ spec, onChange, targets, errors, serverError, runn
         {serverError && <Notice tone="critical">{serverError}</Notice>}
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground">Parameters</span>
-          <span className="tnum font-medium" data-testid="param-count">{integer(paramCount(spec, target.dim))}</span>
+          <span className="tnum font-medium" data-testid="param-count">{integer(paramCount(spec, dim))}</span>
         </div>
         <div className="flex gap-2">
           {running ? (

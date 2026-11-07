@@ -21,8 +21,9 @@ import funcprox
 
 from . import catalog, registry
 from .jobs import JobQueue
-from .lab import LabManager, clean
-from .schemas import JobRequest, PredictRequest, RunSpec, SaveRequest
+from .lab import LabManager, clean, preview
+from .schemas import FunctionSpec, JobRequest, PredictRequest, RunSpec, SaveRequest, SearchRequest
+from .search import SearchManager
 
 STATIC = Path(__file__).resolve().parent / "static"
 STREAM_TICK_S = 0.1
@@ -74,6 +75,7 @@ class SameOriginWrites:
 def create_app(models_dir: Path | None = None, jobs: JobQueue | None = None) -> FastAPI:
     models = Path(models_dir) if models_dir else catalog.ROOT / "runs"
     lab = LabManager()
+    searches = SearchManager(lab)
     queue = jobs or default_jobs()
 
     @asynccontextmanager
@@ -134,6 +136,31 @@ def create_app(models_dir: Path | None = None, jobs: JobQueue | None = None) -> 
             raise HTTPException(404, f"unknown document {slug!r}")
         return doc
 
+    @app.post("/api/functions/preview")
+    def preview_function(body: FunctionSpec):
+        return preview(body.resolved)
+
+    # ----------------------------------------------------------------- search
+    def get_search(search_id: str):
+        search = searches.searches.get(search_id)
+        if search is None:
+            raise HTTPException(404, f"unknown search {search_id!r}")
+        return search
+
+    @app.post("/api/search", status_code=201)
+    def start_search(body: SearchRequest):
+        return searches.start(body).state()
+
+    @app.get("/api/search/{search_id}")
+    def read_search(search_id: str):
+        return get_search(search_id).state()
+
+    @app.post("/api/search/{search_id}/stop")
+    def stop_search(search_id: str):
+        search = get_search(search_id)
+        search.stop()
+        return search.state()
+
     # -------------------------------------------------------------------- lab
     def get_run(run_id: str):
         run = lab.get(run_id)
@@ -183,6 +210,16 @@ def create_app(models_dir: Path | None = None, jobs: JobQueue | None = None) -> 
             yield sse("done", dict(run.summary(), final=run.final))
 
         return event_stream(events())
+
+    @app.post("/api/lab/runs/{run_id}/predict")
+    def predict_run(run_id: str, body: PredictRequest):
+        run = get_run(run_id)
+        if run.final is None:
+            raise HTTPException(409, "only a finished run can answer")
+        try:
+            return registry.answer(run.net, run.xs, run.ys, run.target, body.inputs)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
 
     @app.post("/api/lab/runs/{run_id}/save", status_code=201)
     def save_run(run_id: str, body: SaveRequest):

@@ -1,8 +1,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import { type Page, expect, test } from "@playwright/test";
 
-const PAGES = ["/", "/lab", "/experiments", "/experiments/e6", "/experiments/e3", "/explorer", "/models", "/runner", "/documents/findings"];
-const EXPERIMENTS = ["e0", "e1", "e2", "e3", "e4", "e5", "e6", "u1", "u2", "u3", "u4"];
+const PAGES = ["/", "/finder", "/lab", "/experiments", "/experiments/e6", "/experiments/e3", "/explorer", "/models", "/runner", "/documents/findings"];
+const EXPERIMENTS = ["e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7", "u1", "u2", "u3", "u4"];
 
 /** Fails a test on any console error or uncaught exception in the page. */
 function watchErrors(page: Page) {
@@ -31,6 +31,139 @@ test("overview shows numbers computed from the result files", async ({ page }) =
   await expect(page.getByText(/experiments have quick-profile results only/)).toBeVisible();
   await expect(page.locator("svg[role=img]").first()).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+async function openFinder(page: Page) {
+  await page.goto("/finder");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await expect(page.getByTestId("preview-title")).toBeVisible();
+}
+
+const findButton = (page: Page) => page.getByRole("button", { name: "Find the closest curve" });
+
+test("the curve finder ranks every model on a function with a missing middle", async ({ page }) => {
+  test.setTimeout(180_000); // six real trainings, on whatever machine runs the tests
+  const errors = watchErrors(page);
+  await openFinder(page);
+  await expect(page.getByTestId("preview-title")).toContainText("m1");
+  await expect(page.getByRole("switch", { name: "Hide a part of the range" })).toBeChecked();
+  await findButton(page).click();
+  await expect(page.getByTestId("search-status")).toContainText("Finished", { timeout: 120_000 });
+  await expect(page.getByTestId("ranking-row")).toHaveCount(8);
+  await expect(page.getByRole("columnheader", { name: "In the hole" })).toBeVisible();
+  await expect(page.getByRole("img", { name: /curves found/ })).toBeVisible();
+  await expect(page.locator("text=Missing middle").first()).toBeVisible();
+
+  const curves = await page.getByRole("checkbox", { name: /on the chart/ }).count();
+  expect(curves).toBe(8);
+  await page.getByRole("checkbox", { name: /Show Cubic spline LS/ }).check();
+  await expect(page.getByRole("img", { name: /curves found/ }).locator("..").locator("..").getByText("Cubic spline LS")).toBeVisible();
+
+  await page.getByLabel(/Input values/).fill("0, 0.5");
+  await page.getByRole("button", { name: "Predict" }).click();
+  await expect(page.getByRole("row", { name: /^0 In the missing middle/ })).toBeVisible();
+
+  await page.getByRole("link", { name: /Open MLP 2×16 tanh · LM in the Training Lab/ }).click();
+  await expect(page).toHaveURL(/\/lab\?run=/);
+  await expect(page.getByTestId("metric-gap")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("a typed formula is checked while typing and explains mistakes", async ({ page }) => {
+  await openFinder(page);
+  await page.getByRole("radio", { name: "Formula" }).click();
+  const formula = page.getByLabel("f(x) =");
+  await formula.fill("2x");
+  await expect(page.getByText(/Write multiplication as 2\*x/)).toBeVisible();
+  await expect(findButton(page)).toBeDisabled();
+  await formula.fill("open('secret')");
+  await expect(page.getByText(/Unknown function 'open'/)).toBeVisible();
+  await formula.fill("x^3 - x");
+  await expect(page.getByTestId("preview-title")).toHaveText("x^3 - x");
+  await expect(findButton(page)).toBeEnabled();
+
+  await page.getByRole("switch", { name: "Hide a part of the range" }).click();
+  await expect(page.getByRole("slider", { name: /starts at this x/ })).toBeVisible();
+  await expect(page.locator("svg text", { hasText: "Missing middle" })).toBeVisible();
+
+  await formula.fill("x*y");
+  await expect(page.getByLabel("f(x, y) =")).toBeVisible();
+  await expect(page.getByLabel("y from")).toBeVisible();
+  await expect(page.locator("canvas[role=img]").first()).toBeVisible();
+});
+
+test("a function undefined in the middle shows the hole by itself", async ({ page }) => {
+  await openFinder(page);
+  await page.getByRole("radio", { name: "Formula" }).click();
+  await page.getByRole("button", { name: "Undefined in the middle" }).click();
+  await expect(page.locator("svg text", { hasText: "Undefined" })).toBeVisible();
+  await expect(findButton(page)).toBeEnabled();
+});
+
+test("pasted points are checked line by line", async ({ page }) => {
+  await openFinder(page);
+  await page.getByRole("radio", { name: "Points" }).click();
+  const box = page.getByLabel("One x, y pair per line");
+  await expect(box).not.toBeEmpty();
+  await box.fill("0, 1\nnot numbers");
+  await expect(page.getByText(/Line 2 is not a pair of numbers/)).toBeVisible();
+  await expect(findButton(page)).toBeDisabled();
+  await box.fill(Array.from({ length: 20 }, (_, i) => `${i / 10}, ${Math.sin(i / 3)}`).join("\n"));
+  await expect(page.getByText("20 points.")).toBeVisible();
+  await expect(findButton(page)).toBeEnabled();
+  await expect(page.getByRole("img", { name: /Network against the exact function/ })).toBeVisible();
+});
+
+test("a drawn curve becomes the training data", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await openFinder(page);
+  await page.getByRole("radio", { name: "Draw" }).click();
+  await expect(page.getByText("Draw a curve with the mouse or a finger.")).toBeVisible();
+  await expect(findButton(page)).toBeDisabled();
+  const pad = await page.getByTestId("draw-pad").boundingBox();
+  await page.mouse.move(pad!.x + 4, pad!.y + pad!.height / 2);
+  await page.mouse.down();
+  for (let i = 1; i <= 8; i++) await page.mouse.move(pad!.x + (i / 8) * (pad!.width - 8), pad!.y + pad!.height * (0.5 + 0.3 * Math.sin(i)));
+  await page.mouse.up();
+  await expect(page.getByText(/\d+ points\. Draw again/)).toBeVisible();
+  await expect(findButton(page)).toBeEnabled();
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(findButton(page)).toBeDisabled();
+  expect(errors).toEqual([]);
+});
+
+test("searching again keeps both the old results and the new function in view", async ({ page }) => {
+  await openFinder(page);
+  await findButton(page).click();
+  await expect(page.getByTestId("search-results")).toBeVisible();
+  await page.getByRole("button", { name: "Stop" }).click();
+  await expect(page.getByTestId("search-status")).toContainText("Stopped", { timeout: 40_000 });
+  await page.getByRole("switch", { name: "Hide a part of the range" }).click();
+  await expect(page.getByText(/Changed since the search below/)).toBeVisible();
+  await expect(page.getByTestId("search-results")).toBeVisible();
+});
+
+test("an address of a finished server's search shows what happened", async ({ page }) => {
+  await page.goto("/finder?search=nope");
+  await expect(page.getByText("This search is no longer available")).toBeVisible();
+});
+
+test("the lab trains on a typed formula with a missing middle", async ({ page }) => {
+  await page.goto("/lab");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("radio", { name: "Formula" }).click();
+  await page.getByLabel("f(x) =").fill("x^3 - x");
+  await page.getByRole("switch", { name: "Hide a part of the range" }).click();
+  await page.getByLabel("Epochs").fill("30");
+  await page.getByRole("button", { name: "Train" }).click();
+  await expect(page.getByTestId("run-title")).toContainText("custom · MLP");
+  await expect(page.getByText("f = x^3 - x")).toBeVisible();
+  await expect(page.getByTestId("run-status")).toContainText("Finished", { timeout: 60_000 });
+  await expect(page.getByTestId("metric-gap")).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "In the missing middle" })).toBeVisible();
 });
 
 test("a target card opens the lab on that target", async ({ page }) => {
@@ -175,6 +308,13 @@ test("explorer keeps its choices in the address", async ({ page }) => {
   await page.goto(url);
   await expect(page.getByRole("heading", { name: "max err against n params" })).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test("explorer offers the filters that matter on a file with many columns", async ({ page }) => {
+  await page.goto("/explorer?data=e7/runs");
+  await expect(page.getByRole("combobox", { name: "Only target" })).toHaveText("m1");
+  await expect(page.getByRole("combobox", { name: "Only sigma" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Horizontal axis" })).toHaveText("gap_pct");
 });
 
 test("the runner warns before overwriting results and shows the log", async ({ page }) => {

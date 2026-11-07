@@ -33,4 +33,8 @@ export const PRESETS: Preset[] = [
     { target: "f1", hidden: [128, 128], n_train: 100, n_val: 25, sigma: 0.2, epochs: 6000, patience: 0 }),
   make("franke", "Franke in 2-D", "E6", "A 2-D benchmark where networks hold their own against classical methods.",
     { target: "f5", hidden: [16, 16], optimizer: "lm", epochs: 300, patience: 30 }),
+  make("gap-cubic", "Cubic with a hole", "E7", "No data between -0.5 and 0.5, and the network still has to get across. Compare the error in the hole with the error where it had data.",
+    { target: "m4", hidden: [16, 16], optimizer: "lm", epochs: 300, patience: 30 }),
+  make("gap-peak", "Hidden peak", "E7", "The top of the function lies inside the hole, so the data never shows it. Widen the hole to see the network lose it.",
+    { target: "m2", hidden: [16, 16], optimizer: "lm", epochs: 300, patience: 30 }),
 ];

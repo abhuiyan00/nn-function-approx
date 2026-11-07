@@ -8,7 +8,8 @@ from pathlib import Path
 import numpy as np
 
 from funcprox import serialize
-from funcprox.functions import TARGETS
+from funcprox.custom import saved_target
+from funcprox.functions import Target
 
 from .lab import LabRun, clean, make_grid, round_array
 from .schemas import MODEL_NAME
@@ -20,7 +21,7 @@ def path_for(directory: Path, name: str) -> Path | None:
 
 def save(path: Path, run: LabRun) -> None:
     serialize.save(path, run.net, run.xs, run.ys,
-                   meta=clean(dict(target=run.spec.target, label=run.spec.describe(), metrics=run.final["metrics"],
+                   meta=clean(dict(target=run.spec.target, function=run.spec.function_fields(), label=run.spec.describe(), metrics=run.final["metrics"],
                                    train=run.config.to_dict(), spec=run.spec.model_dump())))
 
 
@@ -47,7 +48,7 @@ def list_models(directory: Path) -> list[dict]:
 def model_detail(path: Path) -> dict:
     net, xs, ys, meta = serialize.load(path)
     out = _describe(path)
-    target = TARGETS.get(meta.get("target"))
+    target = saved_target(meta)
     if target is None:
         return clean(dict(out, grid=None, pred=None, residual=None))
     x, grid = make_grid(target)
@@ -56,16 +57,20 @@ def model_detail(path: Path) -> dict:
                       residual=round_array(pred - target(x).ravel(), 4)))
 
 
-def predict(path: Path, inputs: list[list[float]]) -> dict:
-    """Raises ValueError when the inputs do not fit the model."""
-    net, xs, ys, meta = serialize.load(path)
+def answer(net, xs, ys, target: Target | None, inputs: list[list[float]]) -> dict:
+    """What the network says at these inputs. Raises ValueError when they do not fit it."""
     x = np.asarray(inputs, dtype=float)
     dim = xs.lo.size
     if x.ndim != 2 or x.shape[1] != dim:
         raise ValueError(f"this model takes {dim} input value(s) per row")
     y = ys.inverse(net.forward(xs.transform(x))).ravel()
-    target = TARGETS.get(meta.get("target"))
-    exact = target(x).ravel() if target else None
+    exact = target(x).ravel() if target and target.known else None
     return clean(dict(y_hat=y.tolist(), exact=exact.tolist() if exact is not None else None,
                       abs_error=np.abs(y - exact).tolist() if exact is not None else None,
+                      in_gap=target.in_gap(x).tolist() if target else [False] * len(x),
                       outside_box=(np.any(x < xs.lo, axis=1) | np.any(x > xs.hi, axis=1)).tolist()))
+
+
+def predict(path: Path, inputs: list[list[float]]) -> dict:
+    net, xs, ys, meta = serialize.load(path)
+    return answer(net, xs, ys, saved_target(meta), inputs)

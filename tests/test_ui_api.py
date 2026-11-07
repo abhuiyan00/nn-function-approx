@@ -18,7 +18,7 @@ with warnings.catch_warnings():  # starlette's notice about its own httpx depend
 from funcprox import cli  # noqa: E402
 from funcprox.data import make_dataset  # noqa: E402
 from funcprox.functions import get_target  # noqa: E402
-from funcprox_ui import catalog  # noqa: E402
+from funcprox_ui import catalog, search  # noqa: E402
 from funcprox_ui.app import create_app  # noqa: E402
 from funcprox_ui.jobs import JobQueue  # noqa: E402
 from funcprox_ui.lab import LabRun, matched_baselines  # noqa: E402
@@ -53,7 +53,8 @@ def train(client, **spec):
 # ---------------------------------------------------------------------- catalog
 def test_targets_come_with_previews_of_the_right_shape(client):
     targets = {t["key"]: t for t in client.get("/api/targets").json()}
-    assert sorted(targets) == ["f1", "f2", "f3", "f4", "f5", "f6", "f7"]
+    assert sorted(targets) == ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "m1", "m2", "m3", "m4", "m5"]
+    assert targets["m1"]["preview"]["gap"] == [[-0.25, 0.25]] and targets["f1"]["preview"]["gap"] is None
     assert targets["f1"]["preview"]["kind"] == "1d"
     assert len(targets["f1"]["preview"]["x"]) == len(targets["f1"]["preview"]["exact"])
     p = targets["f5"]["preview"]
@@ -64,7 +65,7 @@ def test_targets_come_with_previews_of_the_right_shape(client):
 
 def test_every_experiment_is_described_from_the_docs(client):
     exps = client.get("/api/experiments").json()
-    assert [e["id"] for e in exps] == ["e0", "e1", "e2", "e3", "e4", "e5", "e6", "u1", "u2", "u3", "u4"]
+    assert [e["id"] for e in exps] == ["e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7", "u1", "u2", "u3", "u4"]
     for e in exps:
         assert e["question"], e["id"]
         assert e["hypothesis"], e["id"]
@@ -104,7 +105,7 @@ def test_unknown_resources_are_json_404s(client, path):
 
 def test_overview_is_computed_from_the_result_files(client):
     o = client.get("/api/overview").json()
-    assert o["profiles"] == {"quick": 11}
+    assert o["profiles"] == {"quick": 12}
     assert o["run_count"] > 500
     t = o["highlights"]
     assert round(t["lm_vs_adam"]["f4"]) == 81 and round(t["lm_vs_adam"]["f5"]) == 54
@@ -127,7 +128,7 @@ def test_a_checkout_without_results_still_serves_every_page(client, workdir, mon
     assert overview.status_code == 200
     assert overview.json()["highlights"] == {} and overview.json()["verdicts"] == []
     experiments = client.get("/api/experiments").json()
-    assert len(experiments) == 11 and experiments[0]["profile"] is None
+    assert len(experiments) == 12 and experiments[0]["profile"] is None
     assert client.get("/api/experiments/e6").json()["datasets"] == []
     assert client.get("/api/datasets").json() == []
 
@@ -161,6 +162,13 @@ def test_documents_are_whitelisted_markdown(client):
     dict(arch="kan", target="f1", widths=[1, 5, 2]),      # scalar output only
     dict(lr=0),
     dict(epochs=10 ** 9),
+    dict(formula="__import__('os').system('whoami')"),
+    dict(formula="x", points=[[i, i] for i in range(9)]),
+    dict(target="custom"),
+    dict(points=[[0, 0]]),
+    dict(formula="x", gap=[[5, 6]]),
+    dict(target="f1", gap=[[0, 1], [0, 1]]),
+    dict(formula="x*y", arch="kan", widths=[1, 5, 1]),
 ])
 def test_invalid_specs_are_rejected_before_training(client, bad):
     assert client.post("/api/lab/runs", json=bad).status_code == 422
@@ -361,6 +369,238 @@ def test_saving_never_overwrites_and_refuses_unsafe_names(client, workdir):
         assert client.post(f"/api/lab/runs/{rid}/save", json=dict(name=bad)).status_code == 422, bad
     assert client.get("/api/models/..%2Fevil").status_code == 404
     assert sorted(p.name for p in workdir.iterdir()) == ["one.npz"]
+
+
+# ------------------------------------------------------------ your own function
+FUNCTION = dict(formula="x^3 - x", domain=[[-1.5, 1.5]], gap=[[-0.5, 0.5]])
+FAST = dict(hidden=[8], optimizer="lm", epochs=12, patience=0, n_train=120, n_val=40)
+WAVE = [[-1 + i / 20, math.sin(3 * (-1 + i / 20))] for i in range(41)]
+
+
+def preview(client, **function):
+    r = client.post("/api/functions/preview", json=function)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_preview_shows_the_function_its_hole_and_where_the_data_will_be(client):
+    p = preview(client, **FUNCTION)
+    assert p["key"] == "custom" and p["dim"] == 1 and p["formula"] == "x^3 - x"
+    assert p["grid"]["gap"] == [[-0.5, 0.5]] and p["grid"]["known"] is True
+    assert len(p["grid"]["x"]) == len(p["grid"]["exact"])
+    assert len(p["samples"]["x"]) > 50 and all(abs(x) > 0.5 for x in p["samples"]["x"])
+
+
+def test_preview_of_a_built_in_target_and_of_a_surface(client):
+    assert preview(client, target="m1")["grid"]["gap"] == [[-0.25, 0.25]]
+    surface = preview(client, formula="x*y", gap=[[-0.3, 0.3], [-0.3, 0.3]])
+    assert surface["dim"] == 2 and surface["grid"]["kind"] == "2d"
+    inside = [abs(x) <= 0.3 and abs(y) <= 0.3 for x, y in zip(surface["samples"]["x"], surface["samples"]["y"])]
+    assert not any(inside)
+
+
+def test_preview_marks_undefined_values_as_null(client):
+    g = preview(client, formula="sqrt(x^2 - 0.25)")["grid"]
+    middle = [v for x, v in zip(g["x"], g["exact"]) if abs(x) < 0.45]
+    assert middle and all(v is None for v in middle)
+    assert g["exact"][0] == pytest.approx(math.sqrt(0.75), rel=1e-3)
+
+
+def test_preview_of_points_invents_no_exact_function(client):
+    p = preview(client, points=WAVE, gap=[[-0.2, 0.2]])
+    assert p["grid"]["known"] is False and all(v is None for v in p["grid"]["exact"])
+    assert p["samples"]["x"] and all(abs(x) > 0.2 for x in p["samples"]["x"])
+
+
+@pytest.mark.parametrize("function,message", [
+    (dict(formula="2x"), "2*x"),
+    (dict(formula="open('a')"), "open"),
+    (dict(points=[[0, 0]]), "At least 8"),
+    (dict(formula="x", gap=[[-9, 9]]), "almost nothing"),
+    (dict(target="nope"), "nope"),
+])
+def test_preview_says_what_is_wrong(client, function, message):
+    r = client.post("/api/functions/preview", json=function)
+    assert r.status_code == 422 and message in r.json()["detail"][0]["msg"]
+
+
+def test_a_formula_with_a_hole_trains_like_on_the_command_line(client, capsys):
+    run = train(client, **FUNCTION, **FAST, seed=2)
+    assert run["status"] == "done" and run["spec"]["target"] == "custom"
+    assert run["formula"] == "x^3 - x" and run["grid"]["gap"] == [[-0.5, 0.5]]
+    m = run["final"]["metrics"]
+    cli.main(["train", "--formula", "x^3 - x", "--domain=-1.5,1.5", "--gap=-0.5,0.5", "--hidden", "8", "--optimizer", "lm",
+              "--epochs", "12", "--patience", "0", "--n-train", "120", "--n-val", "40", "--seed", "2"])
+    out = capsys.readouterr().out
+    expected = json.loads(out[out.index("{"):])
+    assert m["rmse"] == pytest.approx(expected["rmse"], rel=1e-9)
+    assert m["rmse_gap"] == pytest.approx(expected["rmse_gap"], rel=1e-9) and m["rmse_gap"] > 0
+    assert run["live"]["rmse_gap"] > 0
+
+
+def test_the_baselines_are_split_at_the_hole_too(client):
+    baselines = train(client, **FUNCTION, **FAST)["final"]["baselines"]
+    assert baselines and all(b["rmse_gap"] > 0 and b["rmse_seen"] >= 0 for b in baselines)
+
+
+def test_a_built_in_target_can_be_given_a_hole_in_the_lab(client):
+    run = train(client, target="f4", gap=[[-0.2, 0.2]], **FAST)
+    assert run["spec"]["target"] == "f4" and run["final"]["metrics"]["rmse_gap"] > 0
+
+
+def test_measured_points_train_and_stay_valid_json(client):
+    run = train(client, points=WAVE, gap=[[-0.2, 0.2]], **FAST)
+    assert run["status"] == "done", run["error"]
+    assert run["grid"]["known"] is False and all(v is None for v in run["final"]["residual"])
+    assert all(v is not None for v in run["final"]["pred"])
+    assert run["final"]["metrics"]["rmse_gap"] > 0 and run["final"]["spectrum"] is None
+    assert run["live"]["rmse"] > 0 and run["history"]["test_mse"]
+    assert all(abs(x) > 0.2 for x in run["samples"]["x"])
+
+
+def test_a_function_undefined_in_the_middle_trains_and_stays_valid_json(client):
+    run = train(client, formula="sqrt(x^2 - 0.25)", **FAST)
+    assert run["status"] == "done", run["error"]
+    assert run["final"]["metrics"]["rmse"] > 0 and run["live"]["rmse"] > 0
+    assert run["grid"]["spectrum_exact"] is None
+    middle = [p for x, p in zip(run["grid"]["x"], run["final"]["pred"]) if abs(x) < 0.45]
+    assert all(p is not None for p in middle)  # the network still draws a curve there
+
+
+def test_a_kan_takes_its_inputs_from_the_formula(client):
+    r = client.post("/api/lab/runs", json=dict(formula="x*y", arch="kan", optimizer="lm", epochs=3, patience=0, n_train=40, n_val=10))
+    assert r.status_code == 201 and r.json()["label"].startswith("KAN [2,5,1]")
+
+
+def test_a_model_on_a_formula_is_rebuilt_from_its_file(client):
+    rid = train(client, **FUNCTION, **FAST)["id"]
+    assert client.post(f"/api/lab/runs/{rid}/save", json=dict(name="cubic")).status_code == 201
+    detail = client.get("/api/models/cubic").json()
+    assert detail["target"] == "custom" and detail["formula"] == "x^3 - x" and detail["grid"]["gap"] == [[-0.5, 0.5]]
+    q = client.post("/api/models/cubic/predict", json=dict(inputs=[[1.0], [0.0]])).json()
+    assert q["exact"] == [0.0, 0.0] and q["in_gap"] == [False, True]
+
+
+def test_a_model_on_points_has_no_exact_answer(client):
+    rid = train(client, points=WAVE, **FAST)["id"]
+    assert client.post(f"/api/lab/runs/{rid}/save", json=dict(name="wave")).status_code == 201
+    assert client.get("/api/models/wave").json()["grid"]["known"] is False
+    q = client.post("/api/models/wave/predict", json=dict(inputs=[[0.5]])).json()
+    assert q["exact"] is None and q["abs_error"] is None and q["y_hat"][0] is not None
+
+
+def test_a_finished_run_answers_questions(client):
+    run = train(client, **FUNCTION, **FAST)
+    q = client.post(f"/api/lab/runs/{run['id']}/predict", json=dict(inputs=[[1.0], [0.0], [9.0]]))
+    assert q.status_code == 200
+    assert q.json()["in_gap"] == [False, True, False] and q.json()["outside_box"] == [False, False, True]
+    assert client.post(f"/api/lab/runs/{run['id']}/predict", json=dict(inputs=[[1.0, 2.0]])).status_code == 422
+
+
+def test_a_running_run_does_not_answer_yet(client):
+    rid = client.post("/api/lab/runs", json=dict(target="f1", epochs=50000, patience=0)).json()["id"]
+    assert client.post(f"/api/lab/runs/{rid}/predict", json=dict(inputs=[[0.0]])).status_code == 409
+    client.post(f"/api/lab/runs/{rid}/stop")
+    wait_for(client, rid)
+
+
+# ------------------------------------------------------------- the closest curve
+@pytest.fixture
+def fast_search(monkeypatch):
+    monkeypatch.setitem(search.EFFORT, "quick", dict(epochs=20, patience=0, iters=6))
+
+
+def find(client, timeout=120.0, **body):
+    r = client.post("/api/search", json=body)
+    assert r.status_code == 201, r.text
+    state = r.json()
+    deadline = time.monotonic() + timeout
+    while state["status"] == "running" and time.monotonic() < deadline:
+        time.sleep(0.05)
+        state = client.get(f"/api/search/{state['id']}").json()
+    assert state["status"] != "running", "the search did not finish"
+    return state
+
+
+def test_search_ranks_every_model_by_how_close_it_gets(client, fast_search):
+    s = find(client, base=dict(target="m4", n_train=120, n_val=40))
+    assert s["status"] == "done" and s["known"] is True and s["done"] == s["total"] == 6
+    rmse = [r["rmse"] for r in s["rows"]]
+    assert rmse == sorted(rmse) and s["winner"] == s["rows"][0]["key"]
+    assert s["best_network"] == next(r["key"] for r in s["rows"] if r["kind"] == "network")
+    assert {r["kind"] for r in s["rows"]} == {"network", "classical"}
+    assert {"Chebyshev LS", "Cubic spline LS"} <= {r["key"] for r in s["rows"]}
+    assert len(s["rows"]) == 8 and sorted(r["slot"] for r in s["rows"]) == list(range(8))
+    for r in s["rows"]:
+        assert len(r["pred"]) == len(s["grid"]["x"]), r["key"]
+        assert r["rmse_gap"] > 0 and r["rmse_seen"] >= 0 and r["n_params"] > 0
+
+
+def test_search_names_the_choice_made_without_seeing_the_function(client, fast_search):
+    s = find(client, base=dict(target="m4", n_train=120, n_val=40))
+    val = {r["key"]: r["val_mse"] for r in s["rows"]}
+    assert s["blind_pick"] == min(val, key=val.get)
+
+
+def test_every_network_of_a_search_can_be_opened_in_the_lab(client, fast_search):
+    s = find(client, base=dict(target="m1", n_train=120, n_val=40))
+    runs = [r for r in s["rows"] if r["kind"] == "network"]
+    assert len(runs) == 6
+    assert all(client.get(f"/api/lab/runs/{r['best_run']}").status_code == 200 for r in runs)
+    assert all(r["best_run"] is None for r in s["rows"] if r["kind"] == "classical")
+
+
+def test_several_seeds_show_how_much_the_starting_point_matters(client, fast_search):
+    s = find(client, base=dict(target="m4", n_train=120, n_val=40), seeds=2)
+    assert s["total"] == 12
+    for r in (r for r in s["rows"] if r["kind"] == "network"):
+        assert r["seeds"] == 2 and r["rmse_lo"] <= r["rmse"] <= r["rmse_hi"]
+        assert all(a <= b for a, b in zip(r["lo"], r["hi"]))
+
+
+def test_search_on_a_surface_sends_only_the_surfaces_it_names(client, fast_search):
+    s = find(client, base=dict(target="m5", n_train=120, n_val=40))
+    assert s["grid"]["kind"] == "2d" and s["status"] == "done"
+    named = (s["winner"], s["best_network"])
+    for r in s["rows"]:
+        assert (r["pred"] is not None) == (r["key"] in named), r["key"]
+    assert len(s["rows"][0]["pred"]) == len(s["grid"]["exact"])
+
+
+def test_search_works_on_measured_points(client, fast_search):
+    s = find(client, base=dict(points=WAVE, gap=[[-0.2, 0.2]]))
+    assert s["known"] is False and s["status"] == "done"
+    assert s["rows"][0]["rmse"] > 0 and s["rows"][0]["rmse_gap"] > 0
+
+
+def test_search_keeps_the_function_data_and_noise_it_was_given(client, fast_search):
+    s = find(client, base=dict(formula="sin(3*x)", domain=[[-2, 2]], sigma=0.1, n_train=120, n_val=40, hidden=[4], optimizer="sgd"))
+    assert s["formula"] == "sin(3*x)"
+    network = next(r for r in s["rows"] if r["kind"] == "network")
+    run = client.get(f"/api/lab/runs/{network['best_run']}").json()
+    assert run["spec"]["sigma"] == 0.1 and run["spec"]["domain"] == [[-2.0, 2.0]]
+
+
+def test_a_search_can_be_stopped_and_keeps_what_finished(client):
+    state = client.post("/api/search", json=dict(base=dict(target="m1"), effort="thorough")).json()
+    assert state["status"] == "running"
+    assert client.post(f"/api/search/{state['id']}/stop").status_code == 200
+    deadline = time.monotonic() + 30
+    while state["status"] == "running" and time.monotonic() < deadline:
+        time.sleep(0.05)
+        state = client.get(f"/api/search/{state['id']}").json()
+    assert state["status"] == "stopped"
+
+
+@pytest.mark.parametrize("body", [dict(base=dict(formula="import os")), dict(base=dict(target="m1"), seeds=0),
+                                  dict(base=dict(target="m1"), seeds=99), dict(base=dict(target="m1"), effort="huge")])
+def test_a_bad_search_is_refused(client, body):
+    assert client.post("/api/search", json=body).status_code == 422
+
+
+def test_an_unknown_search_is_a_404(client):
+    assert client.get("/api/search/nope").status_code == 404
+    assert client.post("/api/search/nope/stop").status_code == 404
 
 
 # ------------------------------------------------------------------------- jobs

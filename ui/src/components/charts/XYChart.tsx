@@ -56,7 +56,7 @@ function XYChartImpl({
   const { sx, sy, xd, yd } = useMemo(() => {
     const xs = xDomain ?? (xCategories
       ? ([-0.3, xCategories.length - 0.7] as [number, number])
-      : domainOf(series.flatMap((s) => s.x), xScale, 0));
+      : domainOf([...series.flatMap((s) => s.x), ...(dots?.x ?? [])], xScale, 0));
     const yValues = function* () {
       for (const s of series) {
         yield* s.y;
@@ -64,10 +64,11 @@ function XYChartImpl({
         if (s.hi) yield* s.hi;
       }
       for (const h of hlines) yield h.y;
+      if (dots) yield* dots.y;
     };
     const ys = yDomain ?? domainOf(yValues(), yScale);
     return { xd: xs, yd: ys, sx: makeScale(xScale, xs, [0, plotW]), sy: makeScale(yScale, ys, [plotH, 0]) };
-  }, [series, xScale, yScale, xDomain, yDomain, xCategories, hlines, plotW, plotH]);
+  }, [series, xScale, yScale, xDomain, yDomain, xCategories, hlines, dots, plotW, plotH]);
 
   const valid = (v: number | null | undefined, kind: AxisKind): v is number =>
     v != null && Number.isFinite(v) && (kind === "linear" || v > 0);
@@ -198,12 +199,12 @@ function XYChartImpl({
                 </clipPath>
               </defs>
               <g clipPath={`url(#clip-${ariaLabel.replace(/\W/g, "")})`}>
-                {dots && dots.x.map((x, i) => (
-                  <circle key={i} cx={sx(x)} cy={sy(dots.y[i])} r={1.6} fill="var(--subtle)" opacity={0.55} />
-                ))}
                 {drawn.filter((s) => s.band).map((s) => <path key={`b${s.id}`} d={s.band} fill={s.color} opacity={0.12} />)}
                 {drawn.filter((s) => s.underlay).map((s) => (
                   <path key={s.id} d={s.path} fill="none" stroke={s.color} strokeWidth={s.width ?? 4} strokeLinecap="round" strokeLinejoin="round" />
+                ))}
+                {dots && dots.x.map((x, i) => ( // above the thick exact curve, or noise-free samples vanish under it
+                  <circle key={i} cx={sx(x)} cy={sy(dots.y[i])} r={1.6} fill="var(--foreground)" opacity={0.45} />
                 ))}
                 {drawn.filter((s) => !s.underlay).map((s) => (
                   <path key={s.id} d={s.path} fill="none" stroke={s.color} strokeWidth={s.width ?? 2} strokeLinecap="round" strokeLinejoin="round" />

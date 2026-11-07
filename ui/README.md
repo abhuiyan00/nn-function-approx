@@ -32,6 +32,7 @@ stand-in for experiment jobs, so a test never overwrites anything in the reposit
 |---|---|
 | `src/pages/` | One file per route; the lab is in `src/pages/lab/` |
 | `src/components/charts/` | Own SVG and canvas charts on d3-scale and d3-shape |
+| `src/components/FunctionPicker.tsx` | Formula, points and drawing input, and the missing-middle sliders, shared by the Curve Finder and the lab |
 | `src/components/ui/` | shadcn/ui components, generated: `npx shadcn@latest add <name>` |
 | `src/lib/api.ts` | Types and calls of every API route |
 | `src/lib/experimentCharts.ts` | The interactive chart of each experiment, as data |

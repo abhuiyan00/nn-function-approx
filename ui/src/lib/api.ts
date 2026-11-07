@@ -5,6 +5,11 @@ export type Activation = "tanh" | "sigmoid" | "relu" | "silu" | "sine";
 
 export interface RunSpec {
   target: string;
+  formula: string | null;
+  domain: [number, number][] | null;
+  points: [number, number][] | null;
+  /** Null keeps the target's own missing middle, empty removes it. */
+  gap: [number, number][] | null;
   arch: "mlp" | "kan";
   hidden: number[];
   act: Activation;
@@ -28,9 +33,63 @@ export interface RunSpec {
   data_seed: number;
 }
 
+interface GridCommon {
+  /** Null where the function is undefined; all null for measured data. */
+  exact: (number | null)[];
+  gap?: [number, number][] | null;
+  /** False for measured data: there is no exact function behind it. */
+  known?: boolean;
+}
+
 export type Grid =
-  | { kind: "1d"; x: number[]; exact: number[]; box: [number, number]; spectrum_exact?: (number | null)[] | null }
-  | { kind: "2d"; x: number[]; y: number[]; exact: number[]; box: [[number, number], [number, number]]; spectrum_exact?: null };
+  | (GridCommon & { kind: "1d"; x: number[]; box: [number, number]; spectrum_exact?: (number | null)[] | null })
+  | (GridCommon & { kind: "2d"; x: number[]; y: number[]; box: [number, number][]; spectrum_exact?: null });
+
+export interface FunctionPreview {
+  key: string;
+  formula: string;
+  dim: number;
+  grid: Grid;
+  samples: { x: number[]; y: number[] };
+}
+
+export interface SearchRow {
+  key: string;
+  /** Colour slot: fixed per model, whatever its rank. */
+  slot: number;
+  kind: "network" | "classical";
+  status: RunStatus;
+  seeds: number;
+  n_params: number;
+  best_run: string | null;
+  rmse?: number | null;
+  rmse_lo?: number | null;
+  rmse_hi?: number | null;
+  rmse_gap?: number | null;
+  rmse_seen?: number | null;
+  max_err?: number | null;
+  val_mse?: number | null;
+  seconds?: number | null;
+  pred?: (number | null)[] | null;
+  lo?: (number | null)[] | null;
+  hi?: (number | null)[] | null;
+}
+
+export interface SearchState {
+  id: string;
+  status: "running" | "done" | "stopped";
+  done: number;
+  total: number;
+  formula: string;
+  dim: number;
+  known: boolean;
+  grid: Grid;
+  samples: { x: number[]; y: number[] };
+  rows: SearchRow[];
+  winner: string | null;
+  best_network: string | null;
+  blind_pick: string | null;
+}
 
 export interface Target {
   key: string;
@@ -77,6 +136,7 @@ export interface Snapshot {
   pred: (number | null)[];
   residual: (number | null)[];
   rmse: number | null;
+  rmse_gap?: number | null;
   max_err: number | null;
   r2: number | null;
   spectrum: { pred: (number | null)[] } | null;
@@ -88,11 +148,16 @@ export interface Baseline {
   n_coef: number;
   rmse: number;
   max_err: number;
+  rmse_gap?: number | null;
+  rmse_seen?: number | null;
 }
 
 export interface RunFinal {
   metrics: {
     rmse: number | null;
+    rmse_gap?: number | null;
+    rmse_seen?: number | null;
+    max_err_gap?: number | null;
     mae: number | null;
     max_err: number | null;
     r2: number | null;
@@ -239,6 +304,7 @@ export interface Prediction {
   exact: number[] | null;
   abs_error: number[] | null;
   outside_box: boolean[];
+  in_gap: boolean[];
 }
 
 export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled";
@@ -324,6 +390,11 @@ export const api = {
   stopRun: (id: string) => post<RunSummary>(`/api/lab/runs/${id}/stop`),
   deleteRun: (id: string) => request<void>(`/api/lab/runs/${id}`, { method: "DELETE" }),
   saveRun: (id: string, name: string) => post<{ name: string; path: string }>(`/api/lab/runs/${id}/save`, { name }),
+  predictRun: (id: string, inputs: number[][]) => post<Prediction>(`/api/lab/runs/${id}/predict`, { inputs }),
+  previewFunction: (fields: Partial<RunSpec>) => post<FunctionPreview>("/api/functions/preview", fields),
+  startSearch: (body: { base: RunSpec; effort: "quick" | "thorough"; seeds: number }) => post<SearchState>("/api/search", body),
+  search: (id: string) => request<SearchState>(`/api/search/${id}`),
+  stopSearch: (id: string) => post<SearchState>(`/api/search/${id}/stop`),
   models: () => request<SavedModel[]>("/api/models"),
   model: (name: string) => request<ModelDetail>(`/api/models/${name}`),
   predict: (name: string, inputs: number[][]) => post<Prediction>(`/api/models/${name}/predict`, { inputs }),

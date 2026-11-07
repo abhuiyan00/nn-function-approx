@@ -12,9 +12,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useFunctionPreview } from "@/hooks/useFunctionPreview";
 import { useRunStream } from "@/hooks/useRunStream";
 import { ApiError, type RunDetail, type RunSpec, type RunSummary, api } from "@/lib/api";
 import { duration, integer, sci } from "@/lib/format";
+import { functionDim, isCustom } from "@/lib/functions";
 import { defaultSpec, validateSpec } from "@/lib/runs";
 import { ConfigPanel } from "./ConfigPanel";
 import { PRESETS, type Preset } from "./presets";
@@ -42,9 +44,13 @@ function Metrics({ run }: { run: RunDetail }) {
   const lm = run.spec.optimizer === "lm";
   const epoch = h.epoch.length ? h.epoch[h.epoch.length - 1] : 0;
   const elapsed = run.final?.seconds ?? (h.wall.length ? h.wall[h.wall.length - 1] : null);
+  const known = run.grid.known !== false;
+  const hole = m?.rmse_gap ?? live?.rmse_gap;
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-      <Stat label="RMSE vs exact f" value={<span data-testid="metric-rmse">{sci(m?.rmse ?? live?.rmse)}</span>} detail={m ? "10,000-point grid" : "Live, coarse grid"} />
+      <Stat label={known ? "RMSE vs exact f" : "RMSE on held-out points"} value={<span data-testid="metric-rmse">{sci(m?.rmse ?? live?.rmse)}</span>} detail={!known ? "Points it never trained on" : m ? "10,000-point grid" : "Live, coarse grid"} />
+      {hole != null && <Stat label="In the missing middle" value={<span data-testid="metric-gap">{sci(hole)}</span>} detail="It saw no data here" />}
+      {m?.rmse_seen != null && <Stat label="Where it had data" value={sci(m.rmse_seen)} />}
       <Stat label="Max error" value={sci(m?.max_err ?? live?.max_err)} detail={m?.argmax_in_edge ? "At the edge of the box" : m ? "Inside the box" : "Live"} />
       <Stat label="R²" value={(m?.r2 ?? live?.r2) == null ? "—" : Math.max(m?.r2 ?? live?.r2 ?? 0, -9.99).toFixed(5)} />
       <Stat label="Parameters" value={integer(run.n_params)} />
@@ -199,8 +205,9 @@ export function LabPage() {
   const [spec, setSpec] = useState<RunSpec>(() => {
     const config = loadConfig();
     const asked = params.get("target");
-    return asked ? { ...config, target: asked, arch: "mlp", widths: null, grid_updates: [] } : config;
+    return asked ? { ...config, target: asked, formula: null, domain: null, points: null, gap: null, arch: "mlp", widths: null, grid_updates: [] } : config;
   });
+  const { preview, error: functionError, checking } = useFunctionPreview(spec);
   const [panel, setPanel] = useState<Panel>("baselines");
   const [compare, setCompare] = useState<string[]>([]);
   const [saving, setSaving] = useState<RunSummary | null>(null);
@@ -252,10 +259,11 @@ export function LabPage() {
 
   const known = targets.data?.find((t) => t.key === spec.target);
   const target = known ?? targets.data?.[0];
+  const custom = isCustom(spec);
   useEffect(() => {
-    if (targets.data && !known) setSpec((s) => ({ ...s, target: targets.data[0].key })); // stale storage or a bad address
-  }, [targets.data, known]);
-  const errors = useMemo(() => (target ? validateSpec(spec, target.dim) : {}), [spec, target]);
+    if (targets.data && !known && !custom) setSpec((s) => ({ ...s, target: targets.data[0].key })); // stale storage or a bad address
+  }, [targets.data, known, custom]);
+  const errors = useMemo(() => (targets.data ? validateSpec(spec, functionDim(spec, targets.data)) : {}), [spec, targets.data]);
   const active = run && (run.status === "queued" || run.status === "running");
   const serverError = start.error instanceof ApiError ? start.error.message : start.error ? "Could not start the run." : null;
 
@@ -295,6 +303,9 @@ export function LabPage() {
           spec={spec}
           onChange={(next) => { setSpec(next); setHint(null); }}
           targets={targets.data}
+          preview={preview}
+          functionError={functionError}
+          checking={checking}
           errors={errors}
           serverError={serverError}
           running={!!active}
@@ -324,7 +335,7 @@ export function LabPage() {
                 </Card>
                 <Card className="gap-2 p-4">
                   <h3 className="text-sm font-semibold">Learning curves</h3>
-                  <p className="-mt-1 text-xs text-muted-foreground">The exact-f curve is what a real user of the device cannot see: it reveals overfitting directly.</p>
+                  <p className="-mt-1 text-xs text-muted-foreground">{run.grid.known === false ? "Held-out points show whether the curve only memorised the points it trained on." : "The exact-f curve is what a real user of the device cannot see: it reveals overfitting directly."}</p>
                   <LossChart run={run} />
                 </Card>
               </div>
@@ -348,10 +359,10 @@ export function LabPage() {
           ) : (
             <Card className="gap-3 p-4">
               <div>
-                <h2 className="text-sm font-semibold">{target.key} · {target.formula}</h2>
+                <h2 className="text-sm font-semibold">{custom ? preview?.formula ?? "Your function" : `${target.key} · ${target.formula}`}</h2>
                 <p className="text-xs text-muted-foreground">Nothing trained yet. Press Train, or pick a finding above.</p>
               </div>
-              <FitView grid={target.preview} />
+              <FitView grid={preview?.grid ?? target.preview} samples={preview?.samples} />
             </Card>
           )}
 

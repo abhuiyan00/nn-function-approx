@@ -5,6 +5,10 @@ export const MAX_PARAMS_LM = 1500; // same limit as funcprox_ui.schemas
 /** CLI defaults of ``python -m funcprox train``: a command lists only what differs. */
 export const defaultSpec: RunSpec = {
   target: "f1",
+  formula: null,
+  domain: null,
+  points: null,
+  gap: null,
   arch: "mlp",
   hidden: [32, 32],
   act: "tanh",
@@ -73,7 +77,12 @@ export function cliCommand(spec: RunSpec): string {
   const d = defaultSpec;
   const parts = ["python -m funcprox train"];
   const add = (flag: string, value: unknown) => parts.push(`--${flag} ${value}`);
-  add("target", spec.target);
+  const ranges = (flag: string, value: [number, number][]) => parts.push(`--${flag}=${value.flat().join(",")}`); // argparse takes -1 for an option without the =
+  if (spec.formula != null) parts.push(`--formula="${spec.formula}"`);
+  else if (spec.points != null) add("points", "points.csv");
+  else add("target", spec.target);
+  if (spec.domain) ranges("domain", spec.domain);
+  if (spec.gap) ranges("gap", spec.gap);
   if (spec.arch === "kan") {
     add("arch", "kan");
     if (spec.widths) add("widths", spec.widths.join(","));
@@ -165,7 +174,7 @@ export function toCsv(columns: string[], rows: Row[]): string {
     const s = v == null ? "" : String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  return [columns.join(","), ...rows.map((r) => columns.map((c) => cell(r[c])).join(","))].join("\n") + "\n";
+  return [columns.map(cell).join(","), ...rows.map((r) => columns.map((c) => cell(r[c])).join(","))].join("\n") + "\n";
 }
 
 export function downloadText(filename: string, text: string, type = "text/csv"): void {
