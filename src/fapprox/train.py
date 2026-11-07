@@ -77,15 +77,18 @@ def _loss_grads(net: Network, x: Array, z: Array, l2: float):
 
 
 def fit(net: Network, x_tr: Array, z_tr: Array, x_va: Array, z_va: Array,
-        cfg: TrainConfig, callback: Callable[[int, Network], None] | None = None) -> History:
+        cfg: TrainConfig, callback: Callable[[int, Network], object] | None = None,
+        history: History | None = None) -> History:
+    """Train ``net``. ``callback(epoch, net)`` runs after every epoch; a truthy return stops
+    training (best weights are still restored). ``history`` lets a caller read progress live."""
     if cfg.optimizer.lower() == "lm":
-        return fit_lm(net, x_tr, z_tr, x_va, z_va, cfg, callback)
+        return fit_lm(net, x_tr, z_tr, x_va, z_va, cfg, callback, history)
 
     rng = np.random.default_rng([cfg.seed, 7])
     opt = make_optimizer(cfg.optimizer, net.params, cfg.lr, cfg.momentum)
     n = len(x_tr)
     bs = n if cfg.batch <= 0 or cfg.batch >= n else cfg.batch
-    hist = History()
+    hist = History() if history is None else history
     best = net.get_flat()
     wait, updates, t0 = 0, 0, time.perf_counter()
     if callback:
@@ -113,8 +116,9 @@ def fit(net: Network, x_tr: Array, z_tr: Array, x_va: Array, z_va: Array,
         hist.val_mse.append(va)
         hist.wall.append(time.perf_counter() - t0)
         hist.updates.append(updates)
-        if callback:
-            callback(ep, net)
+        if callback and callback(ep, net):
+            hist.stop_reason = "stopped by callback"
+            break
         if va < hist.best_val:
             hist.best_val, hist.best_epoch, wait = va, ep, 0
             best = net.get_flat()
@@ -134,7 +138,8 @@ def fit(net: Network, x_tr: Array, z_tr: Array, x_va: Array, z_va: Array,
 
 
 def fit_lm(net: Network, x_tr: Array, z_tr: Array, x_va: Array, z_va: Array,
-           cfg: TrainConfig, callback: Callable[[int, Network], None] | None = None) -> History:
+           cfg: TrainConfig, callback: Callable[[int, Network], object] | None = None,
+           history: History | None = None) -> History:
     """Levenberg-Marquardt (Levenberg 1944, Marquardt 1963; for MLPs: Hagan & Menhaj 1994).
 
         theta <- theta - (J^T J + mu I)^-1 J^T e
@@ -145,7 +150,7 @@ def fit_lm(net: Network, x_tr: Array, z_tr: Array, x_va: Array, z_va: Array,
     if len(x_tr) > cfg.lm_max_points:
         idx = np.random.default_rng([cfg.seed, 11]).choice(len(x_tr), cfg.lm_max_points, replace=False)
         x_tr, z_tr = x_tr[idx], z_tr[idx]
-    hist = History()
+    hist = History() if history is None else history
     mu = cfg.mu
     theta = net.get_flat()
     best = theta.copy()
@@ -199,8 +204,9 @@ def fit_lm(net: Network, x_tr: Array, z_tr: Array, x_va: Array, z_va: Array,
         hist.wall.append(time.perf_counter() - t0)
         hist.updates.append(updates)
         hist.mu.append(mu)
-        if callback:
-            callback(it, net)
+        if callback and callback(it, net):
+            hist.stop_reason = "stopped by callback"
+            break
         if va < hist.best_val:
             hist.best_val, hist.best_epoch, wait = va, it, 0
             best = theta.copy()

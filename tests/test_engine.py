@@ -1,4 +1,9 @@
-"""Correctness tests of the hand-written engine."""
+"""Correctness tests of the engine."""
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -8,7 +13,7 @@ from fapprox.data import make_dataset
 from fapprox.functions import TARGETS, get_target
 from fapprox.gradcheck import gradient_error, jacobian_error
 from fapprox.model import build_kan, build_mlp, kan_param_count, mlp_param_count
-from fapprox.train import TrainConfig, fit, mse
+from fapprox.train import History, TrainConfig, fit, mse
 
 RNG = np.random.default_rng(123)
 X1 = RNG.uniform(-1, 1, (40, 1))
@@ -111,3 +116,35 @@ def test_targets_shapes():
         ds = make_dataset(t, n_train=50, n_val=10, n_test=400)
         assert ds.y_train.shape == (50, 1) and ds.y_test.shape[1] == 1
         assert np.all(np.abs(ds.u_test) <= 1 + 1e-12)
+
+
+@pytest.mark.parametrize("optimizer", ["adam", "lm"])
+def test_fit_fills_a_caller_owned_history_live(optimizer):
+    ds = make_dataset(get_target("f4"), n_train=100, n_val=30, data_seed=0)
+    net = build_mlp(1, [6], "tanh", seed=1)
+    live, seen = History(), []
+    h = fit(net, ds.u_train, ds.z_train, ds.u_val, ds.z_val,
+            TrainConfig(optimizer=optimizer, epochs=5, patience=0),
+            callback=lambda ep, _n: seen.append(len(live.epoch)), history=live)
+    assert h is live
+    assert seen == [0, 1, 2, 3, 4, 5]
+
+
+@pytest.mark.parametrize("optimizer", ["adam", "lm"])
+def test_truthy_callback_stops_training_and_restores_best_weights(optimizer):
+    ds = make_dataset(get_target("f4"), n_train=100, n_val=30, data_seed=0)
+    net = build_mlp(1, [6], "tanh", seed=1)
+    h = fit(net, ds.u_train, ds.z_train, ds.u_val, ds.z_val,
+            TrainConfig(optimizer=optimizer, epochs=50, patience=0),
+            callback=lambda ep, _n: ep >= 3)
+    assert len(h.epoch) == 3
+    assert h.stop_reason == "stopped by callback"
+    assert mse(net, ds.u_val, ds.z_val) == pytest.approx(h.best_val)
+
+
+def test_importing_the_engine_pins_blas_to_one_thread():
+    # measured on the lab's LM preset: spinning BLAS threads make small solves about 2x slower
+    code = "import os, fapprox; print(os.environ['OPENBLAS_NUM_THREADS'], os.environ['OMP_NUM_THREADS'])"
+    env = {k: v for k, v in os.environ.items() if k not in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS")}
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+    assert subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True).stdout.split() == ["1", "1"]
