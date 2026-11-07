@@ -7,7 +7,7 @@ Target length: 15-20 pages + appendix.
 ## 1. Short description of the problem and assumptions · owner A
 * The "device" view of function approximation; why the exact f is known in our study.
 * Assumptions A1-A6 (PROJECT_PLAN §2). Universal approximation in two sentences, with E0 as the picture.
-* Seven targets and the property each one probes (`functions.py`, README table).
+* The targets and the property each one probes (`functions.py`, README table), and the functions a user can bring (`custom.py`).
 * Figure: `e0_sanity_units.png`.
 
 ## 2. Training and testing sets, pre-processing · owner A
@@ -15,6 +15,7 @@ Target length: 15-20 pages + appendix.
 * Pre-processing: domain scaling to [-1, 1], z-score of labels with training statistics (`data.py`), and why
   (tanh saturation, comparable learning rates across targets, same scaling for extrapolation points).
 * Noise model and the heteroscedastic case (U4).
+* Data with a missing middle, and measured points with a held-out fifth (assumptions A7, A8).
 * Table: data sets per experiment (from EXPERIMENTS.md).
 
 ## 3. Output data and post-processing · owner A
@@ -36,6 +37,7 @@ Target length: 15-20 pages + appendix.
 
 ## 5. Results analysis and final remarks · owner B (remarks: both)
 * Is the network fitted to the problem? E6 scaling plot + Runge picture; when to prefer classical methods.
+* E7: the closest curve across a missing middle, and why validation points cannot pick it (`e7_missing_middle_fits.png`).
 * U1: optimisation vs approximation error. U2: KAN vs MLP and interpretability.
 * U3: spectral bias and its fixes. U4: where the approximation can be trusted.
 * Limitations: synthetic targets, ≤ 2-D inputs, LM cost grows as P³, seeds.

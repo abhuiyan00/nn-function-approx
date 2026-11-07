@@ -28,8 +28,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import numpy as np  # noqa: E402
 
+from funcprox.custom import make_target  # noqa: E402
 from funcprox.data import make_dataset  # noqa: E402
-from funcprox.functions import get_target  # noqa: E402
 from funcprox.metrics import evaluate, predict_original  # noqa: E402
 from funcprox.model import build_kan, build_mlp  # noqa: E402
 from funcprox.train import TrainConfig, fit  # noqa: E402
@@ -71,7 +71,7 @@ def run_one(spec: dict) -> dict:
     """Train one network described by ``spec`` and return a flat result row."""
     s = dict(DEFAULTS)
     s.update(spec)
-    target = get_target(s["target"])
+    target = make_target(target=s["target"], gap=s.get("gap"))
     ds = make_dataset(target, s["n_train"], s["n_val"], s["sigma"], s["data_seed"])
     net = build(s, target.dim)
     cfg = TrainConfig(optimizer=s["optimizer"], lr=s["lr"], lr_schedule=s["lr_schedule"], batch=s["batch"], epochs=s["epochs"],
@@ -81,8 +81,9 @@ def run_one(spec: dict) -> dict:
     hist = fit(net, ds.u_train, ds.z_train, ds.u_val, ds.z_val, cfg)
     m = evaluate(net, ds)
     row = {k: v for k, v in s.items() if k not in ("return_pred", "return_hist")}
-    for k in ("hidden", "widths", "fourier", "kan_grid_schedule"):
-        row[k] = json.dumps(list(row[k]) if isinstance(row[k], tuple) else row[k])
+    for k in ("hidden", "widths", "fourier", "kan_grid_schedule", "gap"):
+        if k in row:  # only E7 sets a gap, and the other result files keep their columns
+            row[k] = json.dumps(list(row[k]) if isinstance(row[k], tuple) else row[k])
     row.update(m)
     row.update(seconds=time.perf_counter() - t0, best_epoch=hist.best_epoch, epochs_run=len(hist.epoch),
                updates=hist.updates[-1] if hist.updates else 0, stop=hist.stop_reason)

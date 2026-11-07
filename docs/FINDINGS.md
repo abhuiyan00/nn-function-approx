@@ -24,6 +24,9 @@ smaller than about 1.5× are within seed spread (pilot, 17 Oct) and are not clai
 6. **Trust has to be measured.** Ensemble spread grows 20-35× outside the training box but
    still covers almost none of the extrapolation error; split conformal intervals hit their
    nominal 90 % coverage, and a noise-weighted score keeps it in every region (U4).
+7. **Fitting the data well says little about a missing middle.** A network can miss the exact
+   function by 5e-7 where it had data and by 0.12 inside the hole. Validation points outside
+   the hole picked the model closest inside it in only 21 of 40 settings (E7).
 
 ## Per experiment
 
@@ -79,6 +82,24 @@ smaller than about 1.5× are within seed spread (pilot, 17 Oct) and are not clai
 * Runge: degree-20 interpolation on equispaced nodes has max error 59.8 (pilot: 59.8, same
   setting), on Chebyshev nodes 0.015. The phenomenon belongs to the nodes, not to polynomials.
 
+### E7 · The missing middle
+Medians of 2 seeds, 1,000 training points, 40 settings (5 targets × 4 hole widths × 2 noise levels).
+* Closest inside the hole without noise: Chebyshev in 18 of 20 settings, because it extends an
+  analytic function almost exactly (m1 at a 30 % hole: 9e-13), and a KAN in the other 2, on the surface m5.
+* With noise σ = 0.05 the exact recovery is gone (Chebyshev on m1: 0.19). The closest is then the
+  2 × 16 tanh network trained with LM in 9 of 20 settings, Chebyshev in 7 and the cubic spline in 4.
+* The hole's width sets the error: the best network on m1 goes from 3.1e-4 at 10 % to 0.40 at
+  40 %, on m4 from 3.1e-5 to 6.8e-3.
+* A peak hidden in the hole (m2, 30 %): LM misses the data by 4.9e-7 and the hole by 0.12, reaching
+  only about 0.78 of the true height of 1. The other networks stay near 0.4 to 0.45.
+* A kink hidden in the hole (m3): ReLU loses its advantage from E2 (0.15), and tanh with LM rounds the
+  kink off and comes closer (0.032).
+* KANs fit the seen data best (m1: 4e-6) and wiggle inside the hole, because spline coefficients over
+  empty cells are barely constrained: with noise their error exceeds 1 on m1 and m4. On m5 they win.
+* The cubic spline has the same weakness: with noise and a 30 % hole it reaches 3.6 on the 1-D targets.
+* Validation points cannot judge the hole. They picked the closest model in 21 of 40 settings, and
+  the worst pick was 94× off. The Curve Finder shows this choice next to the true ranking.
+
 ### U1 · Levenberg-Marquardt
 * Median Adam/LM error ratio ×81 on Runge, ×54 on Franke. The worst LM seed is still better
   than the best Adam seed on both targets. Hybrid Adam → LM is similar to LM alone.
@@ -112,3 +133,4 @@ smaller than about 1.5× are within seed spread (pilot, 17 Oct) and are not clai
 * Re-check E4 with 20,000 points (pilot range) and E1 with 5 seeds.
 * U1 with 10 seeds; U2 with 5 seeds and Adam-trained KANs as a second optimiser.
 * E2 SIREN ω₀ sweep {5, 10, 20, 30}; U3 SIREN with ω₀ = 10.
+* E7 with 5 seeds: 2 seeds cannot separate close models, and some curves against the width are not smooth yet.

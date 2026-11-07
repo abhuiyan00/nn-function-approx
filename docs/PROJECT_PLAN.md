@@ -25,8 +25,10 @@ weights), and estimation error (finite noisy data).
 | A2 | f is continuous on the box; f6 is continuous but not differentiable; f2 is tested outside its box. | Universal approximation theorems need continuity on a compact set. |
 | A3 | Label noise is additive Gaussian, ε ~ N(0, σ²), independent of x (E4, E5); heteroscedastic σ(x) only in U4. | Standard regression setting; σ is a controlled experimental factor. |
 | A4 | Training inputs are uniform random in the box; the test set is a fixed 10,000-point grid (100 × 100 in 2-D) of exact values. | Random design for training, exhaustive deterministic scoring. |
-| A5 | One scalar output. | All seven targets are scalar; it also keeps the Levenberg-Marquardt Jacobian an N × P matrix. |
+| A5 | One scalar output. | All targets are scalar; it also keeps the Levenberg-Marquardt Jacobian an N × P matrix. |
 | A6 | Data seed fixed (0); model seeds vary the initial weights and mini-batch order only. | Seed spread then measures sensitivity to the starting point, as the assignment asks. |
+| A7 | A missing middle is a box with no training or validation point; the exact f still scores it (E7). Where a typed formula is undefined, nothing is sampled or scored. | Separates what the network was shown from what it has to bridge on its own. |
+| A8 | Measured points have no exact f, so a fifth of them is held out to score on, together with any points hidden in a missing middle. | Without a formula, unseen points are the only honest measure. |
 
 ## 3. Objectives and hypotheses
 
@@ -39,6 +41,7 @@ weights), and estimation error (finite noisy data).
 | E4 | Test error falls with N and is bounded below by the noise; overfitting becomes visible only against the exact f. |
 | E5 | Too short an early-stopping patience stops on a plateau; moderate weight decay helps, strong decay underfits. |
 | E6 | Classical approximators (Chebyshev, splines) beat MLPs on smooth 1-D functions; MLPs are competitive in 2-D and on kinks. |
+| E7 | Inside a missing middle the error is set by what the model assumes, not by how well it fits the data: it grows with the width of the hole, and validation points outside the hole cannot tell which curve is closest inside it. |
 | U1 | The gap to classical methods is largely an *optimisation* gap: second-order LM closes much of it. |
 | U2 | KANs win when the target has Kolmogorov-Arnold structure, and their edges can be read as formulas; not everywhere. |
 | U3 | Plain MLPs learn low frequencies first (spectral bias); Fourier features, SIREN and KAN reduce it. |
@@ -52,7 +55,7 @@ the other's pull requests. Names are to be filled in.
 | | Member A - "classical core" | Member B - "beyond the textbook" |
 |---|---|---|
 | Engine | Dense layer, activations, Adam/SGD loop, early stopping, data pipeline | Levenberg-Marquardt, KAN + B-splines, Fourier features, SIREN, baselines |
-| Experiments | E0, E1, E2, E3, E4, E5 | E6, U1, U2, U3, U4 |
+| Experiments | E0, E1, E2, E3, E4, E5 | E6, E7, U1, U2, U3, U4 |
 | Report | 1. problem & assumptions · 2. input data & pre-processing · 3. output data & post-processing | 4. topology & tuned parameters · 5. results analysis & final remarks |
 | Presentation | Part A: problem, engine, sensitivity study | Part B: baselines, unique studies, conclusions |
 | Shared | tests, code review, final remarks, rehearsal | |

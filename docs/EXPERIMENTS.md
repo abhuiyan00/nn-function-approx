@@ -61,6 +61,13 @@ Every row of every run is stored in `results/<exp>/*.csv` with its full spec.
 * **Compared** MLP 2×H (Adam, LM), Chebyshev least squares, cubic-spline least squares at equal size; Runge interpolation demo.
 * **Figures** `e6_baselines_scaling.png`, `e6_baselines_runge.png`
 
+### E7 · The missing middle
+* **Question** How close can a curve get where it saw no data, and can you tell from the data which curve is closest?
+* **Setting** A centred hole with no training or validation point; the exact f still scores the whole range. N = 1,000 train / 250 val (full: 2,000 / 500).
+* **Varied** targets m1-m5; hole width {10, 20, 30, 40} % of each axis; σ {0, 0.05}; models MLP tanh (LM, Adam), MLP ReLU, Fourier features + tanh, SIREN ω₀ = 10, KAN, Chebyshev LS, cubic-spline LS. Classical sizes are chosen on the validation points.
+* **Measured** RMSE inside the hole, outside it and overall; which model the validation error alone would pick
+* **Figures** `e7_missing_middle_fits.png`, `e7_missing_middle_width.png`
+
 ### U1 · Levenberg-Marquardt
 * **Question** Is the gap to classical methods due to the network or to the optimiser?
 * **Compared** Adam · LM · Adam (100 epochs) → LM on the same 2 × 16 network; f4, f5; 6 seeds (full: 10)

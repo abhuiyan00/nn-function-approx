@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ORDER = ["e0_sanity", "e1_architecture", "e2_activation_init", "e3_training", "e4_data_noise",
-         "e5_regularisation", "e6_baselines", "u1_levenberg_marquardt", "u2_kan_vs_mlp",
+         "e5_regularisation", "e6_baselines", "e7_missing_middle", "u1_levenberg_marquardt", "u2_kan_vs_mlp",
          "u3_spectral_bias", "u4_uncertainty"]
 
 HEADER = """# Results
