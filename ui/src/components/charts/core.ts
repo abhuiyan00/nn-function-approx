@@ -103,7 +103,7 @@ export function ticksOf(kind: AxisKind, domain: [number, number], length: number
   }
   const step = Math.max(1, Math.ceil((hi - lo + 1) / count));
   const ticks: number[] = [];
-  for (let e = lo; e <= hi; e += step) ticks.push(10 ** e);
+  for (let e = lo; e <= hi; e += step) ticks.push(Number(`1e${e}`)); // 10 ** -5 is inexact on some engines
   return ticks;
 }
 
