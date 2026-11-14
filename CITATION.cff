@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use this software or its results, please cite it as below."
+title: "funcprox: a neural network as a device for function approximation"
+abstract: >-
+  Neural networks built from scratch in NumPy (MLP, SIREN, Fourier features, Kolmogorov-Arnold
+  networks, trained with Adam or Levenberg-Marquardt) approximate one-, two- and three-input
+  functions, typed, measured or drawn by hand, next to classical fits. Every model is scored
+  against the exact function, including a missing middle it never saw. Includes a sensitivity
+  study of the network's settings and a browser interface.
+type: software
+authors:
+  - given-names: Alimuzzaman Farhan
+    family-names: Bhuiyan
+    affiliation: Wrocław University of Science and Technology
+repository-code: "https://github.com/abhuiyan00/nn-function-approx"
+license: MIT
+version: 0.1.0
+date-released: "2026-11-07"
+keywords:
+  - function approximation
+  - neural networks
+  - Kolmogorov-Arnold networks
+  - Levenberg-Marquardt
+  - extrapolation
+  - missing data
+  - sensitivity analysis
+  - soft computing
