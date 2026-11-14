@@ -72,10 +72,14 @@ export function paintColumns(columns: (number | null)[], from: { col: number; y:
   return next;
 }
 
+/** The pad's x of a column, and the column of an x: both run across -1 to 1. */
+export const padX = (col: number, n = PAD_COLUMNS) => tidy(-1 + (2 * col) / (n - 1));
+export const padCol = (x: number, n = PAD_COLUMNS) => ((x + 1) / 2) * (n - 1);
+
 export function columnsToPoints(columns: (number | null)[]): Range[] {
   const points: Range[] = [];
   columns.forEach((y, col) => {
-    if (y != null) points.push([tidy(-1 + (2 * col) / (columns.length - 1)), tidy(y)]);
+    if (y != null) points.push([padX(col, columns.length), tidy(y)]);
   });
   return points;
 }
@@ -83,10 +87,22 @@ export function columnsToPoints(columns: (number | null)[]): Range[] {
 export function pointsToColumns(points: Range[] | null, n = PAD_COLUMNS): (number | null)[] {
   const columns = Array<number | null>(n).fill(null);
   for (const [x, y] of points ?? []) {
-    const col = Math.round(((x + 1) / 2) * (n - 1));
+    const col = Math.round(padCol(x, n));
     if (col >= 0 && col < n) columns[col] = y;
   }
   return columns;
+}
+
+/** Columns on each side of the eraser's tip, so that one click still hides a stretch. */
+export const ERASER = 2;
+
+/** The stretch an eraser stroke hid, joined with what was hidden before: there is one missing middle. */
+export function eraseSpan(gap: Range[] | null | undefined, from: number, to: number, n = PAD_COLUMNS): Range[] {
+  const round = (v: number) => Math.round(v * 100) / 100; // the sliders show these; the brush is wider than the rounding
+  const lo = round(padX(Math.max(0, Math.min(from, to) - ERASER), n));
+  const hi = round(padX(Math.min(n - 1, Math.max(from, to) + ERASER), n));
+  const old = gap?.length === 1 ? gap[0] : null;
+  return [[old ? Math.min(old[0], lo) : lo, old ? Math.max(old[1], hi) : hi]];
 }
 
 // ------------------------------------------------------------------- chart regions

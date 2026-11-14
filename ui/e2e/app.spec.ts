@@ -127,9 +127,20 @@ test("a drawn curve becomes the training data", async ({ page }) => {
   await page.mouse.down();
   for (let i = 1; i <= 8; i++) await page.mouse.move(pad!.x + (i / 8) * (pad!.width - 8), pad!.y + pad!.height * (0.5 + 0.3 * Math.sin(i)));
   await page.mouse.up();
-  await expect(page.getByText(/\d+ points\. Draw again/)).toBeVisible();
+  await expect(page.getByText(/\d+ points\. Draw over a part/)).toBeVisible();
+  await expect(findButton(page)).toBeEnabled();
+  // erasing the middle hides it from training; the drawn part stays as what the models are scored on
+  await page.getByRole("radio", { name: "Eraser" }).click();
+  await page.mouse.move(pad!.x + pad!.width * 0.4, pad!.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(pad!.x + pad!.width * 0.6, pad!.y + 10);
+  await page.mouse.up();
+  await expect(page.getByText(/\d+ points, \d+ hidden\./)).toBeVisible();
+  await expect(page.getByTestId("draw-pad-hidden")).toHaveCount(1);
+  await expect(page.getByRole("switch", { name: "Hide a part of the range" })).toBeChecked();
   await expect(findButton(page)).toBeEnabled();
   await page.getByRole("button", { name: "Clear" }).click();
+  await expect(page.getByTestId("draw-pad-hidden")).toHaveCount(0);
   await expect(findButton(page)).toBeDisabled();
   expect(errors).toEqual([]);
 });

@@ -1,4 +1,4 @@
-import { Eraser, Upload } from "lucide-react";
+import { Eraser, Pencil, Trash2, Upload } from "lucide-react";
 import { type PointerEvent, useEffect, useId, useRef, useState } from "react";
 import { Segmented } from "@/components/common";
 import { Field, NumberField, SelectField } from "@/components/fields";
@@ -75,15 +75,25 @@ function PointsInput({ spec, error, onChange }: { spec: RunSpec; error: string |
   );
 }
 
-/** Column heights over x in [-1, 1]. Leaving a part blank is itself a missing middle. */
+/**
+ * Column heights over x in [-1, 1]. Leaving a part blank means no data there at all; the eraser
+ * instead hides a part from training while keeping it, so the networks are scored on how they fill it.
+ */
 function DrawPad({ spec, error, onChange }: { spec: RunSpec; error: string | null; onChange: (patch: Patch) => void }) {
   const [columns, setColumns] = useState(() => pointsToColumns(spec.points));
+  const [tool, setTool] = useState<"pen" | "eraser">("pen");
+  const [sweep, setSweep] = useState<{ from: number; to: number } | null>(null);
   const latest = useRef(columns); // the pointer can lift before the last stroke has rendered
+  const swept = useRef(sweep);
   const pen = useRef<{ col: number; y: number } | null>(null);
   const last = PAD_COLUMNS - 1;
   const paint = (from: { col: number; y: number }, to: { col: number; y: number }) => {
     latest.current = paintColumns(latest.current, from, to);
     setColumns(latest.current);
+  };
+  const erase = (next: { from: number; to: number } | null) => {
+    swept.current = next;
+    setSweep(next);
   };
 
   const mark = (event: PointerEvent<SVGSVGElement>) => {
@@ -91,44 +101,73 @@ function DrawPad({ spec, error, onChange }: { spec: RunSpec; error: string | nul
     const col = Math.round(((event.clientX - box.left) / box.width) * last);
     return { col: Math.min(last, Math.max(0, col)), y: Math.min(1, Math.max(-1, 1 - (2 * (event.clientY - box.top)) / box.height)) };
   };
-  const path = columns.reduce((d, y, col) => {
-    if (y == null) return d;
-    return `${d}${col && columns[col - 1] != null ? "L" : "M"}${col},${((1 - y) * 50).toFixed(1)}`;
+  // what is hidden, with the stroke under way shown before it is let go
+  const gap = sweep ? eraseSpan(spec.gap, sweep.from, sweep.to)[0] : spec.gap?.length === 1 ? spec.gap[0] : null;
+  const hidden = (col: number) => gap != null && padX(col) >= gap[0] && padX(col) <= gap[1];
+  const trace = (keep: boolean) => columns.reduce((d, y, col) => {
+    if (y == null || hidden(col) !== keep) return d;
+    const joined = col && columns[col - 1] != null && hidden(col - 1) === keep;
+    return `${d}${joined ? "L" : "M"}${col},${((1 - y) * 50).toFixed(1)}`;
   }, "");
   const count = columns.filter((y) => y != null).length;
+  const hiddenCount = columns.filter((y, col) => y != null && hidden(col)).length;
+  const status = !count
+    ? "Draw a curve with the mouse or a finger."
+    : error ?? (hiddenCount
+      ? `${count} points, ${hiddenCount} hidden. The dashed part is not trained on; every model is scored on it.`
+      : `${count} points. Draw over a part to change it, or erase a part to hide it from training.`);
 
   return (
     <div className="space-y-2">
+      <Segmented
+        label="Drawing tool"
+        value={tool}
+        onChange={setTool}
+        options={[
+          { value: "pen", label: <span className="inline-flex items-center gap-1"><Pencil className="size-3.5" aria-hidden="true" /> Pen</span> },
+          { value: "eraser", label: <span className="inline-flex items-center gap-1"><Eraser className="size-3.5" aria-hidden="true" /> Eraser</span> },
+        ]}
+      />
       <svg
         viewBox={`0 0 ${last} 100`}
         preserveAspectRatio="none"
         role="img"
         aria-label="Drawing area: x and y both run from -1 to 1. Without a pointer, use Points instead."
         data-testid="draw-pad"
-        className="h-44 w-full cursor-crosshair touch-none rounded-md border bg-surface"
+        className={`h-44 w-full touch-none rounded-md border bg-surface ${tool === "pen" ? "cursor-crosshair" : "cursor-cell"}`}
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture(event.pointerId);
           pen.current = mark(event);
-          paint(pen.current, pen.current);
+          if (tool === "pen") paint(pen.current, pen.current);
+          else erase({ from: pen.current.col, to: pen.current.col });
         }}
         onPointerMove={(event) => {
           if (!pen.current) return;
           const to = mark(event);
-          paint(pen.current, to);
+          const s = swept.current;
+          if (tool === "pen") paint(pen.current, to);
+          else if (s) erase({ from: Math.min(s.from, to.col), to: Math.max(s.to, to.col) });
           pen.current = to;
         }}
         onPointerUp={() => {
           pen.current = null;
-          onChange({ points: columnsToPoints(latest.current) });
+          const s = swept.current;
+          if (tool === "pen") onChange({ points: columnsToPoints(latest.current) });
+          else if (s) {
+            onChange({ gap: eraseSpan(spec.gap, s.from, s.to) });
+            erase(null);
+          }
         }}
       >
+        {gap && <rect data-testid="draw-pad-hidden" x={padCol(gap[0])} width={padCol(gap[1]) - padCol(gap[0])} y={0} height={100} fill="var(--wash)" />}
         <line x1={0} x2={last} y1={50} y2={50} stroke="var(--border)" vectorEffect="non-scaling-stroke" />
         <line x1={last / 2} x2={last / 2} y1={0} y2={100} stroke="var(--border)" vectorEffect="non-scaling-stroke" />
-        <path d={path} fill="none" stroke="var(--series-1)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        <path d={trace(true)} fill="none" stroke="var(--series-1)" strokeWidth={2} strokeDasharray="4 4" opacity={0.6} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        <path d={trace(false)} fill="none" stroke="var(--series-1)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
       </svg>
       <div className="flex items-center justify-between gap-2">
-        <p className={`text-xs ${error && count ? "text-critical-ink" : "text-subtle"}`}>{count ? error ?? `${count} points. Draw again to change them; a blank part stays missing.` : "Draw a curve with the mouse or a finger."}</p>
-        <Button type="button" variant="outline" size="xs" onClick={() => { latest.current = pointsToColumns(null); setColumns(latest.current); onChange({ points: [] }); }}><Eraser /> Clear</Button>
+        <p className={`text-xs ${error && count ? "text-critical-ink" : "text-subtle"}`}>{status}</p>
+        <Button type="button" variant="outline" size="xs" onClick={() => { latest.current = pointsToColumns(null); setColumns(latest.current); onChange({ points: [], gap: null }); }}><Trash2 /> Clear</Button>
       </div>
     </div>
   );

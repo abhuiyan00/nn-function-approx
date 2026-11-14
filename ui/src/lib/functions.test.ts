@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SearchState } from "./api";
-import { boxOf, columnsToPoints, curvesCsv, defaultGap, describeSearch, examplePoints, fitRegions, formulaDim, functionDim, functionFields, isCustom, paintColumns, parsePoints, pointsToColumns, pointsToText, resizeRanges, undefinedRegions } from "./functions";
+import { boxOf, columnsToPoints, curvesCsv, defaultGap, describeSearch, eraseSpan, examplePoints, fitRegions, formulaDim, functionDim, functionFields, isCustom, paintColumns, parsePoints, pointsToColumns, pointsToText, resizeRanges, undefinedRegions } from "./functions";
 import { defaultSpec } from "./runs";
 
 describe("the draw pad", () => {
@@ -19,6 +19,17 @@ describe("the draw pad", () => {
   it("can be restored from its points", () => {
     expect(pointsToColumns([[-1, 0.5], [1, -0.5], [7, 1]], 3)).toEqual([0.5, null, -0.5]);
     expect(pointsToColumns(null, 2)).toEqual([null, null]);
+  });
+  it("hides at least the eraser's width, inside the pad", () => {
+    expect(eraseSpan(null, 5, 5, 11)).toEqual([[-0.4, 0.4]]);
+    expect(eraseSpan(null, 9, 1, 11)).toEqual([[-1, 1]]);
+  });
+  it("joins a second eraser stroke with the first: there is one missing middle", () => {
+    expect(eraseSpan([[-0.4, 0.4]], 8, 8, 11)).toEqual([[-0.4, 1]]);
+    expect(eraseSpan([], 5, 5, 11)).toEqual([[-0.4, 0.4]]);
+  });
+  it("gives edges short enough to read on the sliders", () => {
+    expect(eraseSpan(null, 50, 60)).toEqual([[-0.19, 0.04]]);
   });
 });
 
