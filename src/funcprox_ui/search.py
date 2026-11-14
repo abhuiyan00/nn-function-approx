@@ -134,8 +134,9 @@ class SearchManager:
         self.searches: OrderedDict[str, Search] = OrderedDict()
         self._lock = threading.Lock()
 
-    def start(self, request: SearchRequest) -> Search:
-        search = Search(request, self.lab)
+    def start(self, request, kind=Search):
+        """Start a search, or anything else made of lab runs that is kept the same way (a sweep)."""
+        search = kind(request, self.lab)
         with self._lock:
             self.searches[search.id] = search
             while len(self.searches) > MAX_KEPT:

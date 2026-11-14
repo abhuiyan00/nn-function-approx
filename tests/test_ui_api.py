@@ -813,3 +813,47 @@ def test_a_wave_edge_reports_its_frequency_and_shift():
     match = lab.closest_form(x, np.sin(2.3 * x + 0.4), "x")
     assert re.fullmatch(r"sin\(2\.[23]\d?·x \+0\.[34]\d?\)", match["name"]) and match["r2"] > 0.9999
 
+
+# ------------------------------------------------------------------------- sweep
+def wait_for_sweep(client, sweep_id, timeout=60.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        state = client.get(f"/api/sweeps/{sweep_id}").json()
+        if state["status"] != "running":
+            return state
+        time.sleep(0.05)
+    raise AssertionError("the sweep did not finish")
+
+
+def test_a_sweep_trains_every_value_on_every_seed_and_reports_the_effect(client):
+    base = dict(target="f4", hidden=[4], optimizer="lm", epochs=20, patience=0, n_train=150, n_val=40)
+    r = client.post("/api/sweeps", json=dict(base=base, param="width", values=[12, 2], seeds=2))
+    assert r.status_code == 201, r.text
+    state = wait_for_sweep(client, r.json()["id"])
+    assert state["status"] == "done" and state["done"] == state["total"] == 4
+    small, large = state["rows"]
+    assert (small["value"], large["value"]) == (2, 12) and small["n_params"] < large["n_params"]
+    assert large["rmse"] < small["rmse"] and state["best"] == 12
+    assert large["rmse_lo"] <= large["rmse"] <= large["rmse_hi"] and large["seeds"] == 2
+    assert state["effect"] == pytest.approx(small["rmse"] / large["rmse"]) and state["spread"] >= 1
+    assert client.get(f"/api/lab/runs/{large['best_run']}").json()["spec"]["hidden"] == [12]
+
+
+def test_a_sweep_refuses_values_the_engine_would_refuse(client):
+    bad = [
+        dict(base={}, param="lr", values=[1e-3]),                       # one value is not a study
+        dict(base={}, param="lr", values=[1e-3, 1e-3]),                 # twice the same
+        dict(base={}, param="lr", values=[1e-3, 100]),                  # outside the engine's limit
+        dict(base={}, param="grid", values=[4, 8]),                     # a grid needs a KAN
+        dict(base=dict(optimizer="lm"), param="width", values=[8, 400]),  # too large for Levenberg-Marquardt
+        dict(base={}, param="momentum", values=[0.1, 0.9]),
+    ]
+    for body in bad:
+        assert client.post("/api/sweeps", json=body).status_code == 422, body
+    assert client.get("/api/sweeps/nothing").status_code == 404
+
+
+def test_a_sweep_can_be_stopped(client):
+    r = client.post("/api/sweeps", json=dict(base=dict(epochs=50_000, patience=0), param="lr", values=[1e-3, 1e-2], seeds=1))
+    state = client.post(f"/api/sweeps/{r.json()['id']}/stop").json()
+    assert wait_for_sweep(client, state["id"])["status"] == "stopped"

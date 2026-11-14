@@ -122,6 +122,37 @@ class SearchRequest(BaseModel):
     seeds: int = Field(1, ge=1, le=5)
 
 
+class SweepRequest(BaseModel):
+    """A sensitivity study: train ``base`` once per value of one setting, several seeds each."""
+    model_config = ConfigDict(extra="forbid")
+
+    base: RunSpec
+    param: Literal["lr", "batch", "l2", "n_train", "sigma", "patience", "epochs", "width", "depth", "grid"]
+    values: list[float] = Field(min_length=2, max_length=12)
+    seeds: int = Field(3, ge=1, le=5)
+    _specs: list = PrivateAttr(default_factory=list)
+
+    def spec_for(self, value: float, seed: int) -> RunSpec:
+        """``base`` with the swept setting at ``value``; width and depth reshape the hidden layers."""
+        fields = self.base.model_dump()
+        if self.param == "width":
+            fields["hidden"] = [int(value)] * len(self.base.hidden)
+        elif self.param == "depth":
+            fields["hidden"] = [self.base.hidden[0]] * int(value)
+        else:
+            fields[self.param] = value
+        return RunSpec(**{**fields, "seed": seed})
+
+    @model_validator(mode="after")
+    def _values_fit(self):
+        if len(set(self.values)) != len(self.values):
+            raise ValueError("every value must differ")
+        if self.param in ("width", "depth", "grid") and (self.param == "grid") != (self.base.arch == "kan"):
+            raise ValueError("width and depth apply to MLPs, grid to KANs")
+        self._specs = [[self.spec_for(v, seed) for seed in range(1, self.seeds + 1)] for v in sorted(self.values)]
+        return self
+
+
 class JobRequest(BaseModel):
     experiment: str
     profile: Literal["quick", "full"] = "quick"

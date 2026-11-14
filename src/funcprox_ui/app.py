@@ -24,8 +24,9 @@ from funcprox.export import export_source
 from . import catalog, registry
 from .jobs import JobQueue
 from .lab import LabManager, clean, preview
-from .schemas import FunctionSpec, JobRequest, PredictRequest, RunSpec, SaveRequest, SearchRequest
+from .schemas import FunctionSpec, JobRequest, PredictRequest, RunSpec, SaveRequest, SearchRequest, SweepRequest
 from .search import SearchManager
+from .sweep import Sweep
 
 STATIC = Path(__file__).resolve().parent / "static"
 STREAM_TICK_S = 0.1
@@ -82,6 +83,7 @@ def create_app(models_dir: Path | None = None, jobs: JobQueue | None = None) -> 
     models = Path(models_dir) if models_dir else catalog.ROOT / "runs"
     lab = LabManager()
     searches = SearchManager(lab)
+    sweeps = SearchManager(lab)
     queue = jobs or default_jobs()
 
     @asynccontextmanager
@@ -166,6 +168,27 @@ def create_app(models_dir: Path | None = None, jobs: JobQueue | None = None) -> 
         search = get_search(search_id)
         search.stop()
         return search.state()
+
+    # ------------------------------------------------------------------ sweep
+    def get_sweep(sweep_id: str):
+        sweep = sweeps.searches.get(sweep_id)
+        if sweep is None:
+            raise HTTPException(404, f"unknown sweep {sweep_id!r}")
+        return sweep
+
+    @app.post("/api/sweeps", status_code=201)
+    def start_sweep(body: SweepRequest):
+        return sweeps.start(body, Sweep).state()
+
+    @app.get("/api/sweeps/{sweep_id}")
+    def read_sweep(sweep_id: str):
+        return get_sweep(sweep_id).state()
+
+    @app.post("/api/sweeps/{sweep_id}/stop")
+    def stop_sweep(sweep_id: str):
+        sweep = get_sweep(sweep_id)
+        sweep.stop()
+        return sweep.state()
 
     # -------------------------------------------------------------------- lab
     def get_run(run_id: str):
