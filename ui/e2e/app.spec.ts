@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { type Page, expect, test } from "@playwright/test";
 
-const PAGES = ["/", "/finder", "/lab", "/experiments", "/experiments/e6", "/experiments/e3", "/explorer", "/models", "/runner", "/documents/findings"];
+const PAGES = ["/", "/finder", "/lab", "/sweep", "/experiments", "/experiments/e6", "/experiments/e3", "/explorer", "/models", "/runner", "/documents/findings"];
 const EXPERIMENTS = ["e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7", "u1", "u2", "u3", "u4"];
 
 /** Fails a test on any console error or uncaught exception in the page. */
@@ -254,6 +254,32 @@ test("a formula of three inputs trains and is shown as a slice", async ({ page }
   await expect(page.getByRole("cell", { name: "RBF network LS" })).toBeVisible();
   await expect(page.getByRole("cell", { name: "Chebyshev LS" })).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+test("a sensitivity study shows how the error depends on one setting", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto("/sweep");
+  await page.evaluate(() => localStorage.setItem("funcprox-lab-config", JSON.stringify(
+    { target: "f4", hidden: [8], optimizer: "lm", epochs: 25, patience: 0, n_train: 200, n_val: 50 })));
+  await page.reload();
+  await expect(page.getByTestId("sweep-base")).toHaveText(/f4 · MLP 8 tanh · Levenberg-Marquardt/);
+  await expect(page.getByRole("combobox", { name: "Setting to vary" })).toContainText("Units per hidden layer"); // LM has no learning rate
+  await page.getByLabel("Values").fill("2, 2");
+  await expect(page.getByText(/Give 2 to 12 different numbers/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run the study" })).toBeDisabled();
+  await page.getByLabel("Values").fill("2, 12");
+  await page.getByRole("radio", { name: "2", exact: true }).click();
+  await expect(page.getByText("4 trainings, one after another.")).toBeVisible();
+  await page.getByRole("button", { name: "Run the study" }).click();
+  await expect(page).toHaveURL(/sweep=\w+/);
+  await expect(page.getByTestId("sweep-progress")).toHaveText("4 of 4 trainings finished", { timeout: 60_000 });
+  await expect(page.getByRole("status").filter({ hasText: /Across these values the error changes by ×/ })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Error against units per hidden layer" })).toBeVisible();
+  await page.getByRole("link", { name: "Open in the Lab" }).last().click();
+  await expect(page.getByTestId("run-title")).toHaveText(/f4 · MLP 1×12 tanh · LM/);
+  expect(errors).toEqual([]);
+  await page.goto("/sweep?sweep=gone"); // the browser logs this 404 itself
+  await expect(page.getByText(/no longer available/)).toBeVisible();
 });
 
 test("a two-dimensional target draws three surfaces", async ({ page }) => {

@@ -10,6 +10,7 @@ const named = <K extends string>(load: () => Promise<Record<K, () => ReactNode>>
 const Overview = named(() => import("./pages/Overview"), "Overview");
 const Finder = named(() => import("./pages/Finder"), "Finder");
 const Lab = named(() => import("./pages/lab/LabPage"), "LabPage");
+const Sweep = named(() => import("./pages/Sweep"), "Sweep");
 const Experiments = named(() => import("./pages/Experiments"), "Experiments");
 const ExperimentDetail = named(() => import("./pages/ExperimentDetail"), "ExperimentDetail");
 const Explorer = named(() => import("./pages/Explorer"), "Explorer");
@@ -52,6 +53,7 @@ export function App() {
             <Route path="/" element={<Overview />} />
             <Route path="/finder" element={<Finder />} />
             <Route path="/lab" element={<Lab />} />
+            <Route path="/sweep" element={<Sweep />} />
             <Route path="/experiments" element={<Experiments />} />
             <Route path="/experiments/:id" element={<ExperimentDetail />} />
             <Route path="/explorer" element={<Explorer />} />
