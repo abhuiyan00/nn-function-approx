@@ -129,6 +129,22 @@ Medians of 2 seeds, 1,000 training points, 40 settings (5 targets × 4 hole widt
   region (1.00) and under-cover the noisy one (0.61); weighted intervals stay at 0.86-0.96
   per region and are 21 % narrower on average.
 
+## Checks against the textbook
+
+`tests/test_textbook.py` turns claims from the literature into tests that run in seconds
+(one hidden layer of 16 tanh units, LM, 300 points; margins checked on seeds 1 to 3). They pass,
+and three of them taught us something while they were written:
+
+* **An RBF network does not always improve with more centres.** On Runge and |x| the error falls
+  steadily from 4 to 30 centres. On sin 2πx it stops near 1e-4 from about 12 centres on: with the
+  width tied to the centre spacing, the Gaussians become so alike that least squares reaches its
+  conditioning floor. The claim is tested on Runge and |x| only.
+* **How much of a hidden peak is lost depends on the width of the hole.** With m2's own 20 % hole the
+  network recovers Runge's peak to RMSE 0.015 to 0.023 (3 seeds), because the shoulders on each side
+  pin it down. E7 shows that at 30 % it reaches only 0.78 of the height.
+* **A hidden kink always comes back rounded.** On m3 the largest error inside the hole is 0.11 to 0.13
+  for every seed, while the error where there was data stays below 3e-4.
+
 ## Open points for the full run
 * Re-check E4 with 20,000 points (pilot range) and E1 with 5 seeds.
 * U1 with 10 seeds; U2 with 5 seeds and Adam-trained KANs as a second optimiser.
