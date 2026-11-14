@@ -24,9 +24,9 @@ class FunctionSpec(BaseModel):
 
     target: str = "f1"
     formula: str | None = None
-    domain: list[Range] | None = Field(None, max_length=2)
+    domain: list[Range] | None = Field(None, max_length=3)
     points: list[Range] | None = Field(None, max_length=MAX_POINTS)
-    gap: list[Range] | None = Field(None, max_length=2)  # null keeps the target's own hole, empty removes it
+    gap: list[Range] | None = Field(None, max_length=3)  # null keeps the target's own hole, empty removes it
     _made: Target = PrivateAttr()
 
     @model_validator(mode="after")

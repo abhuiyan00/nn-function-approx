@@ -18,7 +18,8 @@ MAX_FORMULA = 200
 MIN_POINTS = 8
 MIN_USABLE = 0.05
 DEFAULT_RANGE = (-1.0, 1.0)
-ALLOWED = "Use numbers, x, y, pi, e, + - * / ^ and functions such as sin(x)."
+ALLOWED = "Use numbers, x, y, z, pi, e, + - * / ^ and functions such as sin(x)."
+INPUTS = ("x", "y", "z")  # a formula has as many inputs as the last of these it names
 CONSTANTS = {"pi": np.pi, "e": np.e}
 OPERATORS = {ast.Add: np.add, ast.Sub: np.subtract, ast.Mult: np.multiply, ast.Div: np.divide, ast.Pow: np.power}
 FUNCTIONS = {
@@ -33,11 +34,11 @@ FUNCTIONS = {
 
 
 def _check(node: ast.AST, inputs: set[str]) -> None:
-    """Refuse everything that is not plain arithmetic on x and y."""
+    """Refuse everything that is not plain arithmetic on x, y and z."""
     if isinstance(node, ast.Constant) and type(node.value) in (int, float):
         return
     if isinstance(node, ast.Name):
-        if node.id in ("x", "y"):
+        if node.id in INPUTS:
             inputs.add(node.id)
         elif node.id in FUNCTIONS:
             raise ValueError(f"{node.id} needs brackets, as in {node.id}(x).")
@@ -94,11 +95,11 @@ def _from_formula(text: str, domain) -> Target:
         raise ValueError(f"Could not read this formula. Write multiplication as 2*x and powers as x^2. {ALLOWED}") from None
     inputs: set[str] = set()
     _check(tree, inputs)
-    dim = 2 if "y" in inputs else 1
+    dim = max(INPUTS.index(name) for name in inputs | {"x"}) + 1
     box = _ranges(domain, dim, "the domain") if domain else (DEFAULT_RANGE,) * dim
 
     def fn(x: np.ndarray) -> np.ndarray:
-        values = dict(CONSTANTS, x=x[:, 0], y=x[:, dim - 1])
+        values = dict(CONSTANTS, **{name: x[:, min(i, dim - 1)] for i, name in enumerate(INPUTS)})
         with np.errstate(all="ignore"):  # undefined values are data here: they become holes
             return np.broadcast_to(_evaluate(tree, values), (len(x),)).astype(float)
 

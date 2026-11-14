@@ -77,7 +77,7 @@ def test_a_formula_cannot_run_code(attack):
     ("", "Enter a formula"),
     ("1 +", "Could not read"),
     ("2x", "2*x"),
-    ("z + 1", "'z'"),
+    ("w + 1", "'w'"),
     ("sin", "needs brackets"),
     ("sin()", "takes 1"),
     ("sin(x, x)", "takes 1"),
