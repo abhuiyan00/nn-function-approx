@@ -1,5 +1,0 @@
-# Runtime: the engine itself uses NumPy only. Matplotlib is used for figures.
-numpy>=1.24
-matplotlib>=3.7
-# Development
-pytest>=7
