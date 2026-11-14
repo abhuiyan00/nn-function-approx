@@ -19,6 +19,7 @@ npm --prefix ui run lint
 npm --prefix ui test                   # unit tests of the logic (Vitest)
 npm --prefix ui run build              # the browser tests run against this build
 npm --prefix ui run e2e                # browser and axe accessibility tests (Playwright), about 5 min
+npm --prefix ui run capture            # the screenshots and GIFs of the project README, about 3 min
 python -m pytest                       # the HTTP contract, in tests/test_ui_api.py
 ```
 
@@ -31,12 +32,15 @@ stand-in for experiment jobs, so a test never overwrites anything in the reposit
 | Path | Contents |
 |---|---|
 | `src/pages/` | One file per route; the lab is in `src/pages/lab/` |
+| `src/pages/lab/NetworkView.tsx` | The network in three dimensions, on a canvas; the projection is in `src/lib/network3d.ts` |
 | `src/components/charts/` | Own SVG and canvas charts on d3-scale and d3-shape |
 | `src/components/FunctionPicker.tsx` | Formula, points and drawing input, and the missing-middle sliders, shared by the Curve Finder and the lab |
 | `src/components/ui/` | shadcn/ui components, generated: `npx shadcn@latest add <name>` |
 | `src/lib/api.ts` | Types and calls of every API route |
 | `src/lib/experimentCharts.ts` | The interactive chart of each experiment, as data |
 | `src/hooks/useRunStream.ts` | Follows a training run over Server-Sent Events |
+| `src/lib/sweep.ts` | Settings, value parsing and the verdict of a sensitivity study |
+| `scripts/capture.mjs` | Makes every screenshot and GIF in `docs/screenshots/` from the real interface |
 
 ## Add a chart to an experiment
 
@@ -52,7 +56,9 @@ columns. A JSON result needs an adapter to rows first: see `ADAPTERS` in
   in a fixed order and never cycled.
 * **Colour is never alone.** Series also differ by marker shape, status also has an icon and a label, and
   every chart has a table view and works with the arrow keys.
-* **Series palette.** Checked for colour-blind separation in both themes. Check again if you change it.
+* **Motion explains.** A page fades in, a route draws itself, the 3-D view eases between weights, a bar shimmers
+  while work is running. Nothing moves for decoration, and all of it is switched off under `prefers-reduced-motion`.
+* **Series palette.** Nine colours, checked for colour-blind separation in both themes. Check again if you change it.
   Light-theme series with low contrast (aqua, yellow, magenta) rely on the legend, marker shape and table view.
 * **Offline.** Fonts and libraries are bundled, so a demo needs no network. Only the Swagger page at
   `/api/docs` loads from a CDN.
