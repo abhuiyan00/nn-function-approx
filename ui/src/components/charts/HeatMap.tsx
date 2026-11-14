@@ -16,12 +16,16 @@ interface Props {
   dots?: { x: number[]; y: number[] };
   /** The missing middle, outlined: [[x from, x to], [y from, y to]]. */
   gap?: [number, number][] | null;
+  /** A route over the surface, drawn from its hollow start to its filled end. */
+  path?: { x: number[]; y: number[] };
+  /** Names of the two axes when they are not x and y. */
+  axes?: [string, string];
 }
 
 const MARGIN = { top: 4, right: 8, bottom: 28, left: 36 };
 
 /** One function value per pixel of a small canvas, which the browser smooths when scaling up. */
-export function HeatMap({ title, x, y, values, kind = "sequential", domain, height = 260, dots, gap }: Props) {
+export function HeatMap({ title, x, y, values, kind = "sequential", domain, height = 260, dots, gap, path, axes = ["x", "y"] }: Props) {
   const { theme } = useTheme();
   const { ref, width } = useSize<HTMLDivElement>();
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -102,13 +106,20 @@ export function HeatMap({ title, x, y, values, kind = "sequential", domain, heig
               onPointerMove={onMove}
               onPointerLeave={() => setHover(null)}
             >
-              <canvas ref={canvas} width={nx} height={ny} role="img" aria-label={`${title}: heat map over x and y`} className="block size-full" />
+              <canvas ref={canvas} width={nx} height={ny} role="img" aria-label={`${title}: heat map over ${axes[0]} and ${axes[1]}`} className="block size-full" />
             </div>
             <svg width={width} height={height} aria-hidden="true" className="pointer-events-none absolute inset-0">
               <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
                 {dots?.x.map((px, k) => <circle key={k} cx={sx(px)} cy={sy(dots.y[k])} r={1} fill="var(--foreground)" opacity={0.25} />)}
                 {gap?.length === 2 && (
                   <rect x={sx(gap[0][0])} y={sy(gap[1][1])} width={sx(gap[0][1]) - sx(gap[0][0])} height={sy(gap[1][0]) - sy(gap[1][1])} fill="none" stroke="var(--foreground)" strokeWidth={1.5} strokeDasharray="4 3" />
+                )}
+                {path && path.x.length > 0 && (
+                  <g>
+                    <polyline className="draw-in" pathLength={1} points={path.x.map((px, k) => `${sx(px)},${sy(path.y[k])}`).join(" ")} fill="none" stroke="var(--foreground)" strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" />
+                    <circle cx={sx(path.x[0])} cy={sy(path.y[0])} r={4} fill="var(--surface)" stroke="var(--foreground)" strokeWidth={1.75} />
+                    <circle cx={sx(path.x[path.x.length - 1])} cy={sy(path.y[path.y.length - 1])} r={4} fill="var(--foreground)" stroke="var(--surface)" strokeWidth={1.5} />
+                  </g>
                 )}
                 {ticksOf("linear", [x[0], x[nx - 1]], plotW * 1.2).map((t) => (
                   <text key={t} x={sx(t)} y={plotH + 15} textAnchor="middle" className="tnum fill-subtle text-[11px]">{tickLabel("linear", t)}</text>
@@ -122,7 +133,7 @@ export function HeatMap({ title, x, y, values, kind = "sequential", domain, heig
             {hover && (
               <div className="pointer-events-none absolute top-1 right-2 z-10 rounded-md border bg-popover px-2 py-1 text-xs shadow-sm">
                 <span className="tnum font-medium text-foreground">{sci(value)}</span>
-                <span className="tnum ml-2 text-subtle">x {x[hover.i].toFixed(2)}, y {y[hover.j].toFixed(2)}</span>
+                <span className="tnum ml-2 text-subtle">{axes[0]} {x[hover.i].toFixed(2)}, {axes[1]} {y[hover.j].toFixed(2)}</span>
               </div>
             )}
           </>

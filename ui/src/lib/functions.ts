@@ -13,7 +13,10 @@ export function functionFields(spec: RunSpec): Partial<RunSpec> {
   return { target, ...(formula != null && { formula }), ...(domain != null && { domain }), ...(points != null && { points }), ...(gap != null && { gap }) };
 }
 
-export const formulaDim = (formula: string) => (/\by\b/.test(formula) ? 2 : 1);
+export const AXES = ["x", "y", "z"];
+
+/** A formula has as many inputs as the last of x, y, z it names. */
+export const formulaDim = (formula: string) => (/\bz\b/.test(formula) ? 3 : /\by\b/.test(formula) ? 2 : 1);
 
 export function functionDim(spec: RunSpec, targets: { key: string; dim: number }[]): number {
   if (spec.formula != null) return formulaDim(spec.formula);
@@ -135,7 +138,9 @@ export function describeSearch(state: SearchState): string[] {
     lines.push(`${network.key} misses ${truth} by ${sci(network.rmse_seen)} where it had data, and by ${sci(network.rmse_gap)} inside the missing middle.`);
   }
   if (winner && network?.rmse && winner.rmse && winner.kind === "classical") {
-    lines.push(`${winner.key} gets closer than any network here, by ${factor(network.rmse / winner.rmse)}. For this function a network is not the best tool.`);
+    lines.push(winner.key.startsWith("RBF")
+      ? `An RBF network solved by least squares gets closer than every network trained step by step, by ${factor(network.rmse / winner.rmse)}.`
+      : `${winner.key} gets closer than any network here, by ${factor(network.rmse / winner.rmse)}. For this function a network is not the best tool.`);
   }
   if (state.blind_pick && state.blind_pick !== state.winner && state.rows.some((r) => r.rmse_gap != null)) {
     lines.push(`Judged by its validation points alone, a user would pick ${state.blind_pick}: those points say nothing about the missing middle.`);

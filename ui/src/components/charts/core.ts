@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 export type AxisKind = "linear" | "log";
 
 /** Colours follow the entity: slots are assigned once, in fixed order, and never cycled. */
-export const seriesColor = (index: number) => `var(--series-${(index % 8) + 1})`;
+export const seriesColor = (index: number) => `var(--series-${(index % 9) + 1})`;
 
 export const MARKERS = ["circle", "square", "diamond", "triangle", "triangle-down", "pentagon", "hexagon", "star"] as const;
 export type Marker = (typeof MARKERS)[number];

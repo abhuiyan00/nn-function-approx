@@ -42,8 +42,13 @@ interface GridCommon {
 }
 
 export type Grid =
-  | (GridCommon & { kind: "1d"; x: number[]; box: [number, number]; spectrum_exact?: (number | null)[] | null })
-  | (GridCommon & { kind: "2d"; x: number[]; y: number[]; box: [number, number][]; spectrum_exact?: null });
+  | (GridCommon & {
+      kind: "1d"; x: number[]; box: [number, number]; spectrum_exact?: (number | null)[] | null;
+      /** Where the unit shares are drawn, and the slope of the exact function on ``x``. */
+      units_x?: number[] | null; slope_exact?: (number | null)[] | null;
+    })
+  /** With three inputs this is the slice over the first two; ``fixed`` holds the value of the third. */
+  | (GridCommon & { kind: "2d"; x: number[]; y: number[]; box: [number, number][]; spectrum_exact?: null; fixed?: number[] });
 
 export interface FunctionPreview {
   key: string;
@@ -131,7 +136,93 @@ export interface KanEdge {
   match?: { name: string; r2: number; fit: (number | null)[] };
 }
 
+/** The network as the lab draws it. Wide layers are thinned: `shown` units of `sizes`. */
+export interface NetView {
+  names: string[];
+  sizes: number[];
+  shown: number[];
+  kan: boolean;
+  /** Per layer, input first: probes × shown values, row by row. */
+  act: (number | null)[][];
+  /** Per link between two layers: shown[j] × shown[j + 1] strengths, row by row. */
+  w: (number | null)[][];
+  /** The probe inputs, probes × sizes[0], and the network's answer to each. */
+  x: number[];
+  y: (number | null)[];
+}
+
+/** Share of each unit of the last hidden layer in the answer: curves + rest + offset = the network. */
+export interface UnitShares {
+  index: number[];
+  curves: (number | null)[][];
+  rest: (number | null)[] | null;
+  offset: number | null;
+}
+
+export interface Slope {
+  pred: (number | null)[];
+  rmse: number | null;
+}
+
+/** Split conformal: ``level`` of fresh points lie within ``half`` of the network. */
+export interface TrustBand {
+  level: number;
+  n: number;
+  half: number;
+}
+
+export interface Replay {
+  epoch: number[];
+  pred: (number | null)[][];
+}
+
+/** log10 of the training error on a plane through the final weights, with the path that led there. */
+export interface Landscape {
+  alpha: number[];
+  beta: number[];
+  loss: (number | null)[];
+  path: { a: number[]; b: number[]; epoch: number[] };
+  explained: number | null;
+}
+
+export type SweepParam = "lr" | "batch" | "l2" | "n_train" | "sigma" | "patience" | "epochs" | "width" | "depth" | "grid";
+
+export interface SweepRow {
+  value: number;
+  n_params: number;
+  seeds: number;
+  done: number;
+  status: RunStatus;
+  best_run: string | null;
+  rmse: number | null;
+  rmse_lo: number | null;
+  rmse_hi: number | null;
+  rmse_gap: number | null;
+  seconds: number | null;
+  epochs: number | null;
+}
+
+export interface SweepState {
+  id: string;
+  param: SweepParam;
+  label: string;
+  target: string;
+  formula: string;
+  known: boolean;
+  status: "running" | "done" | "stopped";
+  done: number;
+  total: number;
+  rows: SweepRow[];
+  best: number | null;
+  /** How far the error moves across the values, and between seeds at the best value. */
+  effect: number | null;
+  spread: number | null;
+}
+
 export interface Snapshot {
+  net?: NetView;
+  units?: UnitShares | null;
+  slope?: Slope | null;
   epoch: number;
   pred: (number | null)[];
   residual: (number | null)[];
@@ -175,6 +266,9 @@ export interface RunFinal {
   residual: (number | null)[];
   spectrum: { pred: (number | null)[] } | null;
   edges: KanEdge[] | null;
+  units?: UnitShares | null;
+  slope?: Slope | null;
+  band?: TrustBand | null;
   baselines: Baseline[];
 }
 
@@ -391,6 +485,11 @@ export const api = {
   deleteRun: (id: string) => request<void>(`/api/lab/runs/${id}`, { method: "DELETE" }),
   saveRun: (id: string, name: string) => post<{ name: string; path: string }>(`/api/lab/runs/${id}/save`, { name }),
   predictRun: (id: string, inputs: number[][]) => post<Prediction>(`/api/lab/runs/${id}/predict`, { inputs }),
+  replay: (id: string) => request<Replay>(`/api/lab/runs/${id}/replay`),
+  landscape: (id: string) => request<Landscape>(`/api/lab/runs/${id}/landscape`),
+  startSweep: (body: { base: RunSpec; param: SweepParam; values: number[]; seeds: number }) => post<SweepState>("/api/sweeps", body),
+  sweep: (id: string) => request<SweepState>(`/api/sweeps/${id}`),
+  stopSweep: (id: string) => post<SweepState>(`/api/sweeps/${id}/stop`),
   previewFunction: (fields: Partial<RunSpec>) => post<FunctionPreview>("/api/functions/preview", fields),
   startSearch: (body: { base: RunSpec; effort: "quick" | "thorough"; seeds: number }) => post<SearchState>("/api/search", body),
   search: (id: string) => request<SearchState>(`/api/search/${id}`),

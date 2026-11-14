@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Boxes } from "lucide-react";
+import { Boxes, Download } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
 import { EmptyState, ErrorState, LoadingBlock, Notice, PageHeader, Stat } from "@/components/common";
 import { FitView } from "@/components/FitView";
@@ -31,7 +31,13 @@ function ModelView({ name }: { name: string }) {
         ) : (
           <Notice tone="warning" title="No target recorded">This file does not say which function it was trained on, so it cannot be compared with one.</Notice>
         )}
-        <PredictForm key={m.name} title="Ask the model" dim={m.dim ?? 1} onPredict={(rows) => api.predict(m.name, rows)} />
+        <div className="space-y-3">
+          <PredictForm key={m.name} title="Ask the model" dim={m.dim ?? 1} onPredict={(rows) => api.predict(m.name, rows)} />
+          <Button asChild variant="outline" size="sm">
+            <a href={`/api/models/${m.name}/export`} download><Download /> Export as Python</a>
+          </Button>
+          <p className="text-xs text-subtle">One file with the weights written in and a predict(x) function. It needs only NumPy.</p>
+        </div>
       </div>
     </div>
   );

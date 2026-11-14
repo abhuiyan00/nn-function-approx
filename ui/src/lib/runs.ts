@@ -32,6 +32,20 @@ export const defaultSpec: RunSpec = {
   data_seed: 0,
 };
 
+export const LAB_CONFIG_KEY = "funcprox-lab-config";
+
+/** The settings last used in the Training Lab; the defaults when nothing is stored. */
+export function loadLabConfig(): RunSpec {
+  try {
+    const raw = localStorage.getItem(LAB_CONFIG_KEY);
+    // only settings this version knows: the server refuses unknown ones
+    if (raw) return { ...defaultSpec, ...Object.fromEntries(Object.entries(JSON.parse(raw)).filter(([k]) => k in defaultSpec)) };
+  } catch {
+    /* no stored configuration, or storage is blocked */
+  }
+  return defaultSpec;
+}
+
 /** "16,16", "8 16" or the shape "3x64"; null when it is not a list of positive integers. */
 export function parseIntList(text: string): number[] | null {
   const trimmed = text.trim();

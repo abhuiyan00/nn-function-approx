@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FlaskConical, RotateCcw, Save, Trash2 } from "lucide-react";
+import { Download, FlaskConical, Pause, Play, Printer, Rewind, RotateCcw, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -17,24 +17,83 @@ import { useRunStream } from "@/hooks/useRunStream";
 import { ApiError, type RunDetail, type RunSpec, type RunSummary, api } from "@/lib/api";
 import { duration, integer, sci } from "@/lib/format";
 import { functionDim, isCustom } from "@/lib/functions";
-import { defaultSpec, validateSpec } from "@/lib/runs";
+import { LAB_CONFIG_KEY, defaultSpec, loadLabConfig, validateSpec } from "@/lib/runs";
 import { ConfigPanel } from "./ConfigPanel";
+import { NetworkView } from "./NetworkView";
 import { PRESETS, type Preset } from "./presets";
-import { BaselinesPanel, ComparePanel, DampingPanel, EdgesPanel, LossChart, SpectrumPanel } from "./ResultPanels";
+import { BaselinesPanel, ComparePanel, DampingPanel, EdgesPanel, LandscapePanel, LossChart, SlopePanel, SpectrumPanel, UnitsPanel } from "./ResultPanels";
 
-const CONFIG_KEY = "funcprox-lab-config";
 const MAX_COMPARE = 4;
-type Panel = "spectrum" | "damping" | "edges" | "baselines" | "compare";
+const FRAME_MS = 90; // one kept curve of the replay
+type Panel = "spectrum" | "damping" | "edges" | "baselines" | "units" | "slope" | "landscape" | "compare";
 
-function loadConfig(): RunSpec {
-  try {
-    const raw = localStorage.getItem(CONFIG_KEY);
-    // only settings this version knows: the server refuses unknown ones
-    if (raw) return { ...defaultSpec, ...Object.fromEntries(Object.entries(JSON.parse(raw)).filter(([k]) => k in defaultSpec)) };
-  } catch {
-    /* no stored configuration, or storage is blocked */
-  }
-  return defaultSpec;
+/** Prints the run as a report. Paper is light, so the page is too while it prints. */
+function printReport() {
+  const root = document.documentElement;
+  const theme = root.dataset.theme;
+  root.dataset.theme = "light";
+  window.addEventListener("afterprint", () => { root.dataset.theme = theme; }, { once: true });
+  requestAnimationFrame(() => window.print()); // one frame, so the light colours are in place
+}
+
+/** The fit, and after training a replay of how it got there. */
+function FitCard({ run }: { run: RunDetail }) {
+  const [replay, setReplay] = useState(false);
+  const [at, setAt] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const done = !!run.final;
+  const reel = useQuery({ queryKey: ["replay", run.id], queryFn: () => api.replay(run.id), enabled: replay && done, staleTime: Infinity });
+  const frames = replay ? reel.data : undefined;
+  const last = (frames?.epoch.length ?? 1) - 1;
+  const i = Math.min(at, last);
+  const ended = i >= last;
+
+  useEffect(() => {
+    if (!playing || ended) return;
+    const timer = setInterval(() => setAt((k) => k + 1), FRAME_MS);
+    return () => clearInterval(timer);
+  }, [playing, ended]);
+
+  const exact = run.grid.exact;
+  const frame = frames?.pred[i];
+  const frameError = useMemo(() => frame?.map((v, k) => (v == null || exact[k] == null ? null : v - (exact[k] as number))), [frame, exact]);
+  return (
+    <Card className="gap-2 p-4">
+      <h3 className="text-sm font-semibold">Fit against the exact function</h3>
+      <FitView
+        grid={run.grid}
+        pred={frame ?? run.final?.pred ?? run.live?.pred}
+        residual={frameError ?? run.final?.residual ?? run.live?.residual}
+        samples={run.samples}
+        band={frame ? null : run.final?.band?.half}
+      />
+      {done && (
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
+          {replay ? (
+            <>
+              <Button
+                variant="outline" size="icon-sm" aria-label={playing && !ended ? "Pause the replay" : "Play the replay"}
+                onClick={() => { if (ended) setAt(0); setPlaying(ended || !playing); }}
+              >
+                {playing && !ended ? <Pause /> : <Play />}
+              </Button>
+              <input
+                type="range" min={0} max={last} value={i} aria-label="Point in training"
+                className="h-1.5 min-w-32 flex-1 cursor-pointer accent-[var(--primary)]"
+                onChange={(e) => { setPlaying(false); setAt(Number(e.target.value)); }}
+              />
+              <span className="tnum w-28 text-xs text-muted-foreground" data-testid="replay-epoch">
+                {run.spec.optimizer === "lm" ? "Iteration" : "Epoch"} {frames ? integer(frames.epoch[i]) : "…"}
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => { setReplay(false); setPlaying(false); }}>Close</Button>
+            </>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => { setReplay(true); setAt(0); setPlaying(true); }}><Rewind /> Replay the training</Button>
+          )}
+        </div>
+      )}
+    </Card>
+  );
 }
 
 function Metrics({ run }: { run: RunDetail }) {
@@ -53,6 +112,7 @@ function Metrics({ run }: { run: RunDetail }) {
       {m?.rmse_seen != null && <Stat label="Where it had data" value={sci(m.rmse_seen)} />}
       <Stat label="Max error" value={sci(m?.max_err ?? live?.max_err)} detail={m?.argmax_in_edge ? "At the edge of the box" : m ? "Inside the box" : "Live"} />
       <Stat label="R²" value={(m?.r2 ?? live?.r2) == null ? "—" : Math.max(m?.r2 ?? live?.r2 ?? 0, -9.99).toFixed(5)} />
+      {run.final?.band && <Stat label="9 of 10 new points within" value={<span data-testid="metric-band">± {sci(run.final.band.half)}</span>} detail="Where data was sampled" />}
       <Stat label="Parameters" value={integer(run.n_params)} />
       <Stat label={lm ? "Iteration" : "Epoch"} value={integer(epoch)} detail={run.final ? `Best at ${run.final.best_epoch}` : `of ${integer(run.spec.epochs)}`} />
       <Stat label="Training time" value={duration(elapsed)} detail={run.final?.stop ? run.final.stop : undefined} />
@@ -203,7 +263,7 @@ export function LabPage() {
   const targets = useTargets();
   const [params, setParams] = useSearchParams();
   const [spec, setSpec] = useState<RunSpec>(() => {
-    const config = loadConfig();
+    const config = loadLabConfig();
     const asked = params.get("target");
     return asked ? { ...config, target: asked, formula: null, domain: null, points: null, gap: null, arch: "mlp", widths: null, grid_updates: [] } : config;
   });
@@ -224,7 +284,7 @@ export function LabPage() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(CONFIG_KEY, JSON.stringify(spec));
+      localStorage.setItem(LAB_CONFIG_KEY, JSON.stringify(spec));
     } catch {
       /* only a convenience */
     }
@@ -268,13 +328,17 @@ export function LabPage() {
   const serverError = start.error instanceof ApiError ? start.error.message : start.error ? "Could not start the run." : null;
 
   const panels = useMemo(() => {
-    const options: { value: Panel; label: string }[] = [{ value: "baselines", label: "Classical baselines" }];
-    if (run?.grid.spectrum_exact) options.unshift({ value: "spectrum", label: "Spectrum" });
+    const options: { value: Panel; label: string }[] = [{ value: "baselines", label: "Baselines" }];
+    const grid = run?.grid;
+    if (grid?.spectrum_exact) options.unshift({ value: "spectrum", label: "Spectrum" });
+    if (grid?.kind === "1d" && grid.units_x) options.push({ value: "units", label: "Units" });
+    if (grid?.kind === "1d" && grid.slope_exact) options.push({ value: "slope", label: "Slope" });
     if (run?.spec.optimizer === "lm") options.push({ value: "damping", label: "Damping μ" });
     if (run?.spec.arch === "kan") options.push({ value: "edges", label: "Edges" });
+    if (run) options.push({ value: "landscape", label: "Loss landscape" });
     options.push({ value: "compare", label: `Compare${compare.length ? ` (${compare.length})` : ""}` });
     return options;
-  }, [run?.grid.spectrum_exact, run?.spec.optimizer, run?.spec.arch, compare.length]);
+  }, [run?.grid, run?.spec.optimizer, run?.spec.arch, !!run, compare.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const shownPanel = panels.some((p) => p.value === panel) ? panel : panels[0].value;
 
   const runPreset = (preset: Preset) => {
@@ -287,8 +351,7 @@ export function LabPage() {
   if (targets.isError) return <ErrorState error={targets.error} onRetry={() => targets.refetch()} />;
   if (!targets.data || !target) return <LoadingBlock className="h-[600px]" />;
 
-  const pred = run?.final?.pred ?? run?.live?.pred;
-  const residual = run?.final?.residual ?? run?.live?.residual;
+  const epoch = run?.history.epoch.length ?? 0;
 
   return (
     <div className="space-y-4">
@@ -296,9 +359,10 @@ export function LabPage() {
         title="Training Lab"
         description="Train a network on the engine and watch it approximate the function. Every error is measured against the exact f."
       />
-      <PresetRow onRun={runPreset} disabled={start.isPending} />
+      <div className="print:hidden"><PresetRow onRun={runPreset} disabled={start.isPending} /></div>
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)] print:block">
+        <div className="contents print:hidden">
         <ConfigPanel
           spec={spec}
           onChange={(next) => { setSpec(next); setHint(null); }}
@@ -312,27 +376,44 @@ export function LabPage() {
           onStart={() => { setHint(null); start.mutate(spec); }}
           onStop={() => run && stop.mutate(run.id)}
         />
+        </div>
 
         <div ref={results} className="min-w-0 scroll-mt-4 space-y-4">
           {run ? (
-            <>
+            <div className="stagger space-y-4">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <h2 className="text-sm font-semibold" data-testid="run-title">{run.spec.target} · {run.label}</h2>
                 <span className="text-xs text-muted-foreground">f = {run.formula}</span>
                 <span data-testid="run-status"><StatusPill status={run.status} /></span>
                 {run.saved_as && <Link className="text-xs underline underline-offset-2" to={`/models?model=${run.saved_as}`}>Saved as {run.saved_as}</Link>}
+                {run.final && (
+                  <div className="ml-auto flex flex-wrap gap-1.5 print:hidden">
+                    <Button asChild variant="outline" size="sm">
+                      <a href={`/api/lab/runs/${run.id}/export`} download data-testid="export-device"><Download /> Export as Python</a>
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={printReport}><Printer /> Print a report</Button>
+                  </div>
+                )}
               </div>
+              {active && (
+                <div role="progressbar" aria-label="Training progress" aria-valuemin={0} aria-valuemax={run.spec.epochs} aria-valuenow={epoch} className="h-1 overflow-hidden rounded-full bg-wash">
+                  <div className="shimmer h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${Math.min(100, (100 * epoch) / run.spec.epochs)}%` }} />
+                </div>
+              )}
               {hint && <Notice>{hint}</Notice>}
               {run.status === "failed" && <Notice tone="critical" title="Training failed">{run.error}</Notice>}
               {run.final?.stop === "diverged" && (
                 <Notice tone="warning" title="Training diverged">The loss stopped being a finite number. Try a smaller learning rate.</Notice>
               )}
               <Metrics run={run} />
-              <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+              {run.live?.net && (
                 <Card className="gap-2 p-4">
-                  <h3 className="text-sm font-semibold">Fit against the exact function</h3>
-                  <FitView grid={run.grid} pred={pred} residual={residual} samples={run.samples} />
+                  <h3 className="text-sm font-semibold">Inside the network</h3>
+                  <NetworkView net={run.live.net} />
                 </Card>
+              )}
+              <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+                <FitCard key={run.id} run={run} />
                 <Card className="gap-2 p-4">
                   <h3 className="text-sm font-semibold">Learning curves</h3>
                   <p className="-mt-1 text-xs text-muted-foreground">{run.grid.known === false ? "Held-out points show whether the curve only memorised the points it trained on." : "The exact-f curve is what a real user of the device cannot see: it reveals overfitting directly."}</p>
@@ -345,9 +426,12 @@ export function LabPage() {
                 {shownPanel === "damping" && <DampingPanel run={run} />}
                 {shownPanel === "edges" && <EdgesPanel run={run} />}
                 {shownPanel === "baselines" && <BaselinesPanel run={run} />}
+                {shownPanel === "units" && <UnitsPanel run={run} />}
+                {shownPanel === "slope" && <SlopePanel run={run} />}
+                {shownPanel === "landscape" && <LandscapePanel run={run} />}
                 {shownPanel === "compare" && <ComparePanel ids={compare} />}
               </Card>
-            </>
+            </div>
           ) : runId && !runs.data?.some((r) => r.id === runId) && runs.isSuccess ? (
             <EmptyState
               icon={<FlaskConical className="size-6" />}
@@ -367,6 +451,7 @@ export function LabPage() {
           )}
 
           {!!runs.data?.length && (
+            <div className="print:hidden">
             <History
               runs={runs.data}
               selected={runId}
@@ -377,6 +462,7 @@ export function LabPage() {
               onSave={setSaving}
               onDelete={(r) => remove.mutate(r.id)}
             />
+            </div>
           )}
         </div>
       </div>

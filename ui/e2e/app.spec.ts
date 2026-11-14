@@ -50,13 +50,13 @@ test("the curve finder ranks every model on a function with a missing middle", a
   await expect(page.getByRole("switch", { name: "Hide a part of the range" })).toBeChecked();
   await findButton(page).click();
   await expect(page.getByTestId("search-status")).toContainText("Finished", { timeout: 120_000 });
-  await expect(page.getByTestId("ranking-row")).toHaveCount(8);
+  await expect(page.getByTestId("ranking-row")).toHaveCount(9); // six networks, polynomial, spline, RBF network
   await expect(page.getByRole("columnheader", { name: "In the hole" })).toBeVisible();
   await expect(page.getByRole("img", { name: /curves found/ })).toBeVisible();
   await expect(page.locator("text=Missing middle").first()).toBeVisible();
 
   const curves = await page.getByRole("checkbox", { name: /on the chart/ }).count();
-  expect(curves).toBe(8);
+  expect(curves).toBe(9);
   await page.getByRole("checkbox", { name: /Show Cubic spline LS/ }).check();
   await expect(page.getByRole("img", { name: /curves found/ }).locator("..").locator("..").getByText("Cubic spline LS")).toBeVisible();
 
@@ -90,7 +90,7 @@ test("a typed formula is checked while typing and explains mistakes", async ({ p
   await formula.fill("x*y");
   await expect(page.getByLabel("f(x, y) =")).toBeVisible();
   await expect(page.getByLabel("y from")).toBeVisible();
-  await expect(page.locator("canvas[role=img]").first()).toBeVisible();
+  await expect(page.locator("canvas[role=img]:not([data-testid=network-view])").first()).toBeVisible();
 });
 
 test("a function undefined in the middle shows the hole by itself", async ({ page }) => {
@@ -193,6 +193,10 @@ test("training streams live and ends with metrics and baselines", async ({ page 
   const rmse = Number(await page.getByTestId("metric-rmse").innerText());
   expect(rmse).toBeLessThan(1e-3); // U1: LM gets far below this on Runge
   await expect(page.getByText(/beats this network by|This network beats/)).toBeVisible();
+  const view = page.getByTestId("network-view");
+  await expect(view).toHaveAccessibleName(/layers of 1, 16, 16, 1 units/);
+  // the scene is drawn: some pixel of the canvas is not empty
+  await expect.poll(() => view.evaluate((c: HTMLCanvasElement) => c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data.some((v) => v > 0))).toBe(true);
   await page.getByRole("radio", { name: "Damping μ" }).click();
   await expect(page.getByRole("img", { name: /damping/i })).toBeVisible();
   await page.getByRole("radio", { name: "Spectrum" }).click();
@@ -200,12 +204,64 @@ test("training streams live and ends with metrics and baselines", async ({ page 
   expect(errors).toEqual([]);
 });
 
+test("a finished run can be taken apart: units, slope, loss landscape, replay and export", async ({ page }) => {
+  const errors = watchErrors(page);
+  await runPreset(page, "lm-runge");
+  await expect(page.getByTestId("metric-band")).toHaveText(/^± \d/);
+  // only <main> scrolls: a document taller than the window lets the whole shell slide away
+  expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBe(true);
+  await page.getByRole("radio", { name: "Units" }).click();
+  await expect(page.getByRole("img", { name: /Share of each hidden unit/ })).toBeVisible();
+  await expect(page.getByText("All units + bias = the network")).toBeVisible();
+  await page.getByRole("radio", { name: "Slope" }).click();
+  await expect(page.getByRole("img", { name: /Slope of the network/ })).toBeVisible();
+  expect(Number(await page.getByTestId("slope-rmse").innerText())).toBeLessThan(0.05);
+  await page.getByRole("radio", { name: "Loss landscape" }).click();
+  await expect(page.getByRole("img", { name: /heat map over direction 1 and direction 2/ })).toBeVisible();
+  await expect(page.locator("polyline.draw-in")).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Replay the training" }).click();
+  const slider = page.getByRole("slider", { name: "Point in training" });
+  await slider.fill("0");
+  await expect(page.getByTestId("replay-epoch")).toHaveText("Iteration 0");
+  await page.getByRole("button", { name: "Play the replay" }).click();
+  await expect(page.getByTestId("replay-epoch")).not.toHaveText("Iteration 0");
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(slider).toHaveCount(0);
+
+  const download = page.waitForEvent("download");
+  await page.getByTestId("export-device").click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/^funcprox_\w+\.py$/);
+  await expect(page.getByRole("button", { name: "Print a report" })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("a formula of three inputs trains and is shown as a slice", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto("/lab");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("radio", { name: "Formula" }).click();
+  await page.getByRole("button", { name: "3 inputs" }).click();
+  await expect(page.getByLabel("f(x, y, z) =")).toHaveValue("sin(pi*x) * y + z^2");
+  await expect(page.getByLabel("z from")).toHaveValue("-1");
+  await page.getByLabel("Epochs").fill("20");
+  await page.getByRole("button", { name: "Train" }).click();
+  await expect(page.getByTestId("run-status")).toContainText("Finished", { timeout: 60_000 });
+  await expect(page.getByTestId("slice-note")).toContainText("z = 0");
+  await expect(page.getByTestId("network-view")).toHaveAccessibleName(/layers of 3, 32, 32, 1 units/);
+  await expect(page.getByRole("cell", { name: "RBF network LS" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Chebyshev LS" })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test("a two-dimensional target draws three surfaces", async ({ page }) => {
   const errors = watchErrors(page);
   await runPreset(page, "franke");
-  await expect(page.locator("canvas[role=img]")).toHaveCount(3);
+  await expect(page.locator("canvas[role=img]:not([data-testid=network-view])")).toHaveCount(3);
   const alpha = (c: HTMLCanvasElement) => c.getContext("2d")!.getImageData(0, 0, 1, 1).data[3];
-  for (const i of [0, 1, 2]) expect(await page.locator("canvas[role=img]").nth(i).evaluate(alpha)).toBe(255);
+  for (const i of [0, 1, 2]) expect(await page.locator("canvas[role=img]:not([data-testid=network-view])").nth(i).evaluate(alpha)).toBe(255);
   await expect(page.getByRole("radio", { name: "Spectrum" })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
@@ -214,7 +270,7 @@ test("the KAN preset reads the formula back", async ({ page }) => {
   const errors = watchErrors(page);
   await runPreset(page, "kan-f7");
   await expect(page.getByRole("radio", { name: "Edges" })).toBeChecked();
-  await expect(page.getByText(/R² = /)).toHaveCount(3);
+  await expect(page.getByText(/R² [=>] /)).toHaveCount(3);
   expect(errors).toEqual([]);
 });
 

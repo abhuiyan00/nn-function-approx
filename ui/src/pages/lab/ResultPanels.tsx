@@ -1,10 +1,12 @@
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { EmptyState, Segmented } from "@/components/common";
+import { EmptyState, ErrorState, LoadingBlock, Segmented } from "@/components/common";
+import { HeatMap } from "@/components/charts/HeatMap";
 import { XYChart, type XYSeries } from "@/components/charts/XYChart";
 import { seriesColor } from "@/components/charts/core";
 import { type KanEdge, type RunDetail, api } from "@/lib/api";
-import { duration, factor, sci } from "@/lib/format";
+import { duration, factor, integer, percent, sci } from "@/lib/format";
+import { fitRegions } from "@/lib/functions";
 
 const SPECTRUM_FLOOR = 1e-6;
 
@@ -83,7 +85,7 @@ export function DampingPanel({ run }: { run: RunDetail }) {
 function EdgeChart({ edge, layers }: { edge: KanEdge; layers: number }) {
   const series = useMemo<XYSeries[]>(() => {
     const out: XYSeries[] = [{ id: "phi", label: "Learned edge", color: seriesColor(0), x: edge.x, y: edge.y }];
-    if (edge.match) out.unshift({ id: "fit", label: `Best a·${edge.match.name} + b`, color: "var(--axis)", x: edge.x, y: edge.match.fit, width: 4.5, underlay: true });
+    if (edge.match) out.unshift({ id: "fit", label: `Closest form: a·${edge.match.name} + b`, color: "var(--axis)", x: edge.x, y: edge.match.fit, width: 4.5, underlay: true });
     return out;
   }, [edge]);
   const title = layers > 1 ? `Layer ${edge.layer + 1}: input ${edge.i + 1} to output ${edge.o + 1}` : `Input ${edge.i + 1} to output ${edge.o + 1}`;
@@ -91,7 +93,7 @@ function EdgeChart({ edge, layers }: { edge: KanEdge; layers: number }) {
     <figure className="min-w-0 rounded-md border p-3">
       <figcaption className="mb-1 flex flex-wrap justify-between gap-x-2 text-xs">
         <span className="font-medium">{title}</span>
-        {edge.match && <span className="tnum text-muted-foreground">R² = {edge.match.r2 > 0.9999 ? "> 0.9999" : edge.match.r2.toFixed(4)}</span>}
+        {edge.match && <span className="tnum text-muted-foreground">R² {edge.match.r2 > 0.9999 ? "> 0.9999" : `= ${edge.match.r2.toFixed(4)}`}</span>}
       </figcaption>
       <XYChart series={series} xLabel="Input" height={190} ariaLabel={`${title}: learned edge function`} />
     </figure>
@@ -106,7 +108,8 @@ export function EdgesPanel({ run }: { run: RunDetail }) {
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
         A KAN learns a function on every edge, so its parts can be read directly.
-        {edges[0]?.match ? " Here each edge is compared with the part of exp(sin πx + y²) it should have found." : ""}
+        {" "}Each edge is compared with a short list of simple forms (x, x², x³, |x|, log, √, exp, tanh, sin) and the closest is drawn under it.
+        A high R² suggests that form. It does not prove it: the same function can train into different edges from other starting weights.
       </p>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {edges.map((e) => <EdgeChart key={`${e.layer}-${e.i}-${e.o}`} edge={e} layers={layers} />)}
@@ -133,7 +136,7 @@ export function BaselinesPanel({ run }: { run: RunDetail }) {
       {verdict && <p className="text-sm font-medium">{verdict}</p>}
       <div className="overflow-x-auto rounded-md border">
         <table className="w-full text-[13px]">
-          <caption className="sr-only">Network against classical approximators on the same training data</caption>
+          <caption className="sr-only">Network against least-squares approximators on the same training data</caption>
           <thead className="bg-wash text-left text-xs text-muted-foreground">
             <tr>
               <th scope="col" className="px-3 py-2 font-medium">Approximator</th>
@@ -156,7 +159,11 @@ export function BaselinesPanel({ run }: { run: RunDetail }) {
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-subtle">Least squares on the same training points. The size is the best of experiment E6's sweep no larger than the network, chosen on the validation points. Scored on the same exact grid.</p>
+      <p className="text-xs text-subtle">
+        Least squares on the same training points. The size is the best of experiment E6's sweep no larger than the network, chosen on the validation points. Scored on the same exact grid.
+        The RBF network is a network too, but nothing in it is trained by gradient steps: k-means places its Gaussian units and least squares solves the output weights.
+        Polynomials and splines on a grid stop at two inputs, so with three the RBF network is the only yardstick.
+      </p>
     </div>
   );
 }
@@ -194,6 +201,92 @@ export function ComparePanel({ ids }: { ids: string[] }) {
         height={300}
         ariaLabel="Validation curves of the selected runs"
       />
+    </div>
+  );
+}
+
+export function UnitsPanel({ run }: { run: RunDetail }) {
+  const units = run.final?.units ?? run.live?.units;
+  const x = run.grid.kind === "1d" ? run.grid.units_x : null;
+  const series = useMemo<XYSeries[]>(() => {
+    if (!units || !x) return [];
+    const total = x.map((_, i) => {
+      const sum = units.curves.reduce((s, c) => s + (c[i] ?? NaN), (units.rest?.[i] ?? 0) + (units.offset ?? 0));
+      return Number.isFinite(sum) ? sum : null;
+    });
+    return [
+      { id: "sum", label: "All units + bias = the network", color: "var(--foreground)", x, y: total, width: 2.5 },
+      ...units.curves.map((c, k) => ({ id: `u${k}`, label: `Unit ${units.index[k] + 1}`, color: seriesColor(k), x, y: c, width: 1.25 })),
+      ...(units.rest ? [{ id: "rest", label: "The other units together", color: "var(--subtle)", x, y: units.rest, width: 1.25 }] : []),
+    ];
+  }, [units, x]);
+  if (!units || !x) return <EmptyState title="Not available for this network">Unit shares are drawn for MLPs with one input.</EmptyState>;
+  return (
+    <div>
+      <p className="mb-2 text-xs text-muted-foreground">
+        The answer is a weighted sum of the last hidden layer. A thin curve is one unit's share, its weight times its value.
+        The thick curve adds them all and the bias: that sum is the network. The {units.curves.length} largest shares are drawn one by one.
+      </p>
+      <XYChart series={series} xLabel="x" yLabel="Share of the answer" height={300} ariaLabel="Share of each hidden unit in the answer of the network" />
+    </div>
+  );
+}
+
+export function SlopePanel({ run }: { run: RunDetail }) {
+  const slope = run.final?.slope ?? run.live?.slope;
+  const grid = run.grid;
+  const exact = grid.kind === "1d" ? grid.slope_exact : null;
+  const series = useMemo<XYSeries[]>(() => {
+    if (!exact || grid.kind !== "1d") return [];
+    const out: XYSeries[] = [{ id: "exact", label: "Slope of the exact f", color: "var(--axis)", x: grid.x, y: exact, width: 4.5, underlay: true }];
+    if (slope) out.push({ id: "pred", label: "Slope of the network", color: seriesColor(0), x: grid.x, y: slope.pred, width: 1.75 });
+    return out;
+  }, [exact, slope, grid]);
+  const regions = useMemo(() => (grid.kind === "1d" ? fitRegions(grid) : []), [grid]);
+  if (!exact) return <EmptyState title="Not available for this function">The slope check needs one input and an exact function.</EmptyState>;
+  return (
+    <div>
+      <p className="mb-2 text-xs text-muted-foreground">
+        The slope of the network comes from the chain rule through its layers, not from differences. A network can sit close to f and still get f′ wrong:
+        small ripples in the fit become large in the slope.
+        {slope?.rmse != null && <> RMSE of the slope inside the box: <span className="tnum font-medium text-foreground" data-testid="slope-rmse">{sci(slope.rmse)}</span>.</>}
+      </p>
+      <XYChart series={series} xLabel="x" yLabel="df/dx" height={280} regions={regions} ariaLabel="Slope of the network against the slope of the exact function" />
+    </div>
+  );
+}
+
+export function LandscapePanel({ run }: { run: RunDetail }) {
+  const done = !!run.final;
+  const query = useQuery({ queryKey: ["landscape", run.id], queryFn: () => api.landscape(run.id), enabled: done, staleTime: Infinity });
+  if (!done) return <EmptyState title="Available when training ends">The surface is measured around the final weights.</EmptyState>;
+  if (query.isError) return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
+  const d = query.data;
+  if (!d) return <LoadingBlock className="h-72" />;
+  return (
+    <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+      <HeatMap
+        title="log₁₀ of the training error"
+        x={d.alpha}
+        y={d.beta}
+        values={d.loss}
+        height={320}
+        path={{ x: d.path.a, y: d.path.b }}
+        axes={["direction 1", "direction 2"]}
+      />
+      <div className="space-y-2 text-xs text-muted-foreground">
+        <p>
+          The error over a plane in weight space. The plane passes through the final weights at (0, 0) and is spanned by the two directions that hold
+          {d.explained != null ? <> <span className="tnum font-medium text-foreground">{percent(d.explained)}</span> of </> : " most of "}
+          the path training took (its principal components, as in Li et al. 2018).
+        </p>
+        <p>The line is that path: the hollow dot is the starting weights, the filled dot the trained network. The scale above the map runs from the lowest error on the left to the highest on the right.</p>
+        <p>
+          A long path along a narrow valley is what slows first-order methods down. Levenberg-Marquardt rescales the valley with curvature and crosses it in a few steps:
+          train the same network with Adam and with LM and compare the two paths.
+        </p>
+        <p className="text-subtle">Measured on {integer(Math.min(512, run.spec.n_train))} training points, {d.alpha.length} × {d.beta.length} forward passes. Everything off this plane is not shown.</p>
+      </div>
     </div>
   );
 }

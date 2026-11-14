@@ -20,7 +20,7 @@ function parseInputs(text: string, dim: number): number[][] | null {
 
 export function PredictForm({ title, dim, onPredict }: { title: string; dim: number; onPredict: (rows: number[][]) => Promise<Prediction> }) {
   const id = useId();
-  const [text, setText] = useState(dim === 1 ? "0, 0.25, 0.5" : "0 0\n0.5 0.5");
+  const [text, setText] = useState(dim === 1 ? "0, 0.25, 0.5" : [0, 0.5].map((v) => Array(dim).fill(v).join(" ")).join("\n"));
   const inputs = parseInputs(text, dim);
   const predict = useMutation({ mutationFn: onPredict });
   const result = predict.data;
@@ -31,10 +31,10 @@ export function PredictForm({ title, dim, onPredict }: { title: string; dim: num
       <h3 className="text-sm font-semibold">{title}</h3>
       <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); if (inputs) predict.mutate(inputs); }}>
         <Label htmlFor={id} className="text-xs font-medium text-muted-foreground">
-          {dim === 1 ? "Input values, separated by commas or spaces" : "One pair of input values per line"}
+          {dim === 1 ? "Input values, separated by commas or spaces" : `${dim} input values per line`}
         </Label>
         <Textarea id={id} value={text} onChange={(e) => setText(e.target.value)} rows={3} className="tnum font-mono text-xs" aria-invalid={!inputs} aria-describedby={inputs ? undefined : `${id}-error`} />
-        {!inputs && <p id={`${id}-error`} className="text-xs text-critical-ink">{dim === 1 ? "Enter numbers only." : "Enter pairs of numbers."}</p>}
+        {!inputs && <p id={`${id}-error`} className="text-xs text-critical-ink">{dim === 1 ? "Enter numbers only." : `Enter ${dim} numbers per line.`}</p>}
         <Button type="submit" size="sm" disabled={!inputs || predict.isPending}>Predict</Button>
       </form>
       {predict.error && <Notice tone="critical">{(predict.error as Error).message}</Notice>}

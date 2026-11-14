@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { RunSpec, Target } from "@/lib/api";
-import { PAD_COLUMNS, type Range, columnsToPoints, defaultGap, examplePoints, formulaDim, paintColumns, parsePoints, pointsToColumns, pointsToText, resizeRanges } from "@/lib/functions";
+import { AXES, PAD_COLUMNS, type Range, columnsToPoints, defaultGap, eraseSpan, examplePoints, formulaDim, padCol, padX, paintColumns, parsePoints, pointsToColumns, pointsToText, resizeRanges } from "@/lib/functions";
 
 type Mode = "builtin" | "formula" | "points" | "draw";
 type Patch = Partial<Pick<RunSpec, "target" | "formula" | "domain" | "points" | "gap">>;
@@ -18,8 +18,8 @@ const FORMULAS: { label: string; formula: string; domain: Range[] }[] = [
   { label: "Cubic", formula: "x^3 - x", domain: [[-1.5, 1.5]] },
   { label: "Undefined in the middle", formula: "sqrt(x^2 - 0.25)", domain: [[-1, 1]] },
   { label: "Surface", formula: "sin(3*x) * cos(2*y)", domain: [[-1, 1], [-1, 1]] },
+  { label: "3 inputs", formula: "sin(pi*x) * y + z^2", domain: [[-1, 1], [-1, 1], [-1, 1]] },
 ];
-const AXES = ["x", "y"];
 
 function FormulaInput({ spec, error, onChange }: { spec: RunSpec; error: string | null; onChange: (patch: Patch) => void }) {
   const id = useId();
@@ -33,7 +33,7 @@ function FormulaInput({ spec, error, onChange }: { spec: RunSpec; error: string 
     onChange({ domain: domain.map((r, i) => (i === axis ? (side ? [r[0], value] : [value, r[1]]) as Range : r)) });
   return (
     <div className="space-y-2.5">
-      <Field label={dim === 2 ? "f(x, y) =" : "f(x) ="} htmlFor={id} error={error ?? undefined} help="Numbers, x, y, pi, e, + - * / ^ and sin cos tan exp log sqrt abs sign step min max and more.">
+      <Field label={`f(${AXES.slice(0, dim).join(", ")}) =`} htmlFor={id} error={error ?? undefined} help="Numbers, x, y, z, pi, e, + - * / ^ and sin cos tan exp log sqrt abs sign step min max and more.">
         <Input id={id} value={spec.formula ?? ""} className="h-8 font-mono text-xs" spellCheck={false} autoComplete="off" aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} onChange={(e) => setFormula(e.target.value)} />
       </Field>
       <div className="flex flex-wrap gap-1">

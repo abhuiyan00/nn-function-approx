@@ -58,7 +58,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 end={end}
                 onClick={onNavigate}
                 className={({ isActive }) => cn(
-                  "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-wash hover:text-foreground pointer-coarse:py-3",
+                  "nav-link relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-wash hover:text-foreground pointer-coarse:py-3",
                   isActive && "bg-wash font-medium text-foreground",
                 )}
               >
@@ -92,11 +92,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="flex h-dvh overflow-hidden print:block print:h-auto print:overflow-visible">
       <a href="#main" className="sr-only z-50 rounded-md bg-primary px-3 py-2 text-primary-foreground focus:not-sr-only focus:absolute focus:top-2 focus:left-2">
         Skip to content
       </a>
-      <aside className="hidden w-56 shrink-0 border-r bg-surface lg:block">
+      <aside className="hidden w-56 shrink-0 border-r bg-surface lg:block print:hidden">
         <SidebarContent />
       </aside>
       <Sheet open={open} onOpenChange={setOpen}>
@@ -107,7 +107,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </SheetContent>
       </Sheet>
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-12 shrink-0 items-center justify-between border-b bg-surface px-3 lg:h-11 lg:px-5">
+        <div className="flex h-12 shrink-0 items-center justify-between border-b bg-surface px-3 lg:h-11 lg:px-5 print:hidden">
           <div className="flex items-center gap-2 lg:hidden">
             <Button variant="ghost" size="icon-sm" aria-label="Open navigation" onClick={() => setOpen(true)}>
               <Menu />
@@ -118,8 +118,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="hidden text-xs text-subtle lg:block">Soft Computing · Project I · Topic 11 · WUST 2026/27</div>
           <ThemeToggle />
         </div>
-        <main id="main" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto outline-none">
-          <div className="mx-auto max-w-[1440px] p-4 lg:p-6">{children}</div>
+        {/* relative: screen-reader-only elements are absolute, and without it they stretch the document past the window */}
+        <main id="main" tabIndex={-1} className="relative min-w-0 flex-1 overflow-y-auto outline-none print:overflow-visible">
+          <div key={pathname} className="page-enter mx-auto max-w-[1440px] p-4 lg:p-6">{children}</div>
         </main>
       </div>
     </div>
