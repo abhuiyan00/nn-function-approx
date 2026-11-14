@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Read the findings first
+    url: https://github.com/abhuiyan00/nn-function-approx/blob/main/docs/FINDINGS.md
+    about: What the experiments show so far, in plain words.
+  - name: Experiment protocol
+    url: https://github.com/abhuiyan00/nn-function-approx/blob/main/docs/EXPERIMENTS.md
+    about: Variables, fixed settings and metrics of every experiment.

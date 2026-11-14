@@ -1,0 +1,23 @@
+name: Feature request
+description: An idea for the engine, an experiment or the interface.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: What question should it help answer?
+      description: Start from the question a student or researcher has, not from the button.
+      placeholder: How much does the width of the missing middle change the error inside it?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Can it be done today?
+      description: A setting, an experiment script or a page that already comes close.

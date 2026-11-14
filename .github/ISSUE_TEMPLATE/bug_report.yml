@@ -1,0 +1,59 @@
+name: Bug report
+description: Something in the engine, the server or the interface does not work as described.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. A bug we can reproduce is a bug we can fix, so please give the exact
+        input: the formula or points, the settings, and the seed.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does it happen?
+      options:
+        - Engine (src/funcprox)
+        - Command line (funcprox ...)
+        - Curve Finder
+        - Training Lab
+        - Sensitivity
+        - Saved Models
+        - Experiments or results pages
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Settings, function, seed. For the interface, the button you pressed. For code, a short snippet.
+      placeholder: |
+        1. Curve Finder, Draw, erase between x = 0.2 and 0.5
+        2. Press "Find the closest curve"
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error message or log
+      description: The browser console, the server terminal or the pytest output. Pasted as text, not a screenshot.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown at the bottom of the sidebar ("Engine 0.1.0 connected, Python ..., NumPy ...") or the commit you run.
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows, macOS, Linux]

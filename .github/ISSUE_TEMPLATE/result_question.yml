@@ -1,0 +1,36 @@
+name: Result or claim to check
+description: A number, figure or statement in the results, the report or the interface that looks wrong or does not reproduce.
+labels: [research]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every result here should come back when the same script runs again. If one does not, or a claim
+        in the documents does not match what you see, that is worth an issue even if no code is broken.
+  - type: input
+    id: source
+    attributes:
+      label: Which result or claim?
+      description: Experiment id (E0 to E7, U1 to U4), a file under results/ or docs/, or a test in tests/test_textbook.py.
+      placeholder: E7, results/e7_missing_middle/summary.md, table 2
+    validations:
+      required: true
+  - type: textarea
+    id: claim
+    attributes:
+      label: What it says
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: What you observed
+      description: The command you ran, the profile (quick or full), the seeds, and the numbers you got.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: literature
+    attributes:
+      label: Literature, if any
+      description: A paper or lecture that predicts a different outcome.
