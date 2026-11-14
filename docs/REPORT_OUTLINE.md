@@ -40,7 +40,7 @@ Target length: 15-20 pages + appendix.
 * E7: the closest curve across a missing middle, and why validation points cannot pick it (`e7_missing_middle_fits.png`).
 * U1: optimisation vs approximation error. U2: KAN vs MLP and interpretability.
 * U3: spectral bias and its fixes. U4: where the approximation can be trusted.
-* Limitations: synthetic targets, ≤ 2-D inputs, LM cost grows as P³, seeds.
+* Limitations: synthetic targets, experiments on 1-D and 2-D inputs only (the interface also takes three), LM cost grows as P³, seeds.
 * Final remarks: 5-7 bullet conclusions, each tied to a figure.
 
 ## Appendix

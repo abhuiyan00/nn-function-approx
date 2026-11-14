@@ -21,7 +21,7 @@ weights), and estimation error (finite noisy data).
 
 | # | Assumption | Why |
 |---|---|---|
-| A1 | Inputs lie in a known box (1-D interval or 2-D square). | Lets us scale inputs to [-1, 1] without looking at the data; defines "inside" vs "extrapolation". |
+| A1 | Inputs lie in a known box (1-D interval or 2-D square in the experiments; the interface also takes a box of three inputs). | Lets us scale inputs to [-1, 1] without looking at the data; defines "inside" vs "extrapolation". |
 | A2 | f is continuous on the box; f6 is continuous but not differentiable; f2 is tested outside its box. | Universal approximation theorems need continuity on a compact set. |
 | A3 | Label noise is additive Gaussian, ε ~ N(0, σ²), independent of x (E4, E5); heteroscedastic σ(x) only in U4. | Standard regression setting; σ is a controlled experimental factor. |
 | A4 | Training inputs are uniform random in the box; the test set is a fixed 10,000-point grid (100 × 100 in 2-D) of exact values. | Random design for training, exhaustive deterministic scoring. |
