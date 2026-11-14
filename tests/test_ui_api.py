@@ -6,6 +6,7 @@ import sys
 import time
 import warnings
 
+import numpy as np
 import pytest
 
 pytest.importorskip("fastapi")
@@ -18,7 +19,7 @@ with warnings.catch_warnings():  # starlette's notice about its own httpx depend
 from funcprox import cli  # noqa: E402
 from funcprox.data import make_dataset  # noqa: E402
 from funcprox.functions import get_target  # noqa: E402
-from funcprox_ui import catalog, search  # noqa: E402
+from funcprox_ui import catalog, lab, search  # noqa: E402
 from funcprox_ui.app import create_app  # noqa: E402
 from funcprox_ui.jobs import JobQueue  # noqa: E402
 from funcprox_ui.lab import LabRun, matched_baselines  # noqa: E402
@@ -190,7 +191,7 @@ def test_lab_run_reports_the_same_metrics_as_the_cli(client, capsys):
 def test_finished_run_compares_against_classical_baselines(client):
     final = train(client, **FAST_LM)["final"]
     names = {b["model"]: b for b in final["baselines"]}
-    assert set(names) == {"Chebyshev LS", "Cubic spline LS"}
+    assert set(names) == {"Chebyshev LS", "Cubic spline LS", "RBF network LS"}
     assert names["Chebyshev LS"]["n_coef"] <= final["metrics"]["n_params"]
     assert names["Chebyshev LS"]["rmse"] > 0
 
@@ -257,7 +258,8 @@ def test_kan_run_exposes_learned_edges_and_reads_the_formula_on_f7(client):
     assert run["final"]["metrics"]["rmse"] < 5e-3
     assert [(e["layer"], e["i"], e["o"]) for e in edges] == [(0, 0, 0), (0, 1, 0), (1, 0, 0)]
     assert len(edges[0]["x"]) == len(edges[0]["y"])
-    assert [e["match"]["name"] for e in edges] == ["sin(πx)", "y²", "exp(s/a)"]
+    names = [e["match"]["name"] for e in edges]
+    assert names[:2] == ["sin(πx)", "y²"] and re.fullmatch(r"exp\([\d.]+·s\)", names[2])
     assert all(e["match"]["r2"] > 0.99 for e in edges)
 
 
@@ -288,13 +290,25 @@ def test_diverged_training_is_reported_with_valid_json(client):
     assert run["final"]["stop"] in ("diverged", "max epochs")
 
 
-def test_restored_best_weights_do_not_fake_a_drop_on_the_exact_f_curve():
+def test_restored_best_weights_do_not_fake_a_drop_on_the_exact_f_curve(monkeypatch):
     # a small noisy data set overfits: the best validation epoch comes long before the last one
+    monkeypatch.setattr(lab, "MIN_SNAPSHOT_S", float("inf"))  # no timed snapshots: the clock must not decide this test
     run = LabRun(RunSpec(target="f1", hidden=[32, 32], sigma=0.5, n_train=30, n_val=10, epochs=400, patience=0, seed=1))
     run.execute()
     assert run.final["best_epoch"] < run.final["epochs_run"]
-    best_weights_mse = (run.live["rmse"] / run.ys.std) ** 2
-    assert run.test_mse[-1] != pytest.approx(best_weights_mse, rel=1e-3)
+    assert run.test_epoch == [0]  # the snapshot of the restored weights stays off the curve
+
+
+def test_the_network_view_gets_units_links_and_values(client):
+    run = train(client, target="f5", hidden=[40, 3], fourier_m=4, epochs=2, patience=0, n_train=50, n_val=10)
+    view = run["live"]["net"]
+    assert view["names"] == ["input", "Fourier", "tanh", "tanh", "output"]
+    assert view["sizes"] == [2, 8, 40, 3, 1] and view["shown"] == [2, 8, lab.VIEW_UNITS, 3, 1]
+    assert [len(w) for w in view["w"]] == [a * b for a, b in zip(view["shown"], view["shown"][1:])]
+    assert [len(a) for a in view["act"]] == [lab.VIEW_PROBES * n for n in view["shown"]]
+    assert len(view["x"]) == 2 * lab.VIEW_PROBES and len(view["y"]) == lab.VIEW_PROBES
+    kan = train(client, **KAN_F7)["live"]["net"]
+    assert kan["kan"] and kan["sizes"] == [2, 1, 1] and all(w >= 0 for link in kan["w"] for w in link)
 
 
 def test_baselines_for_a_large_network_stay_small_enough_to_solve():
@@ -529,8 +543,8 @@ def test_search_ranks_every_model_by_how_close_it_gets(client, fast_search):
     assert rmse == sorted(rmse) and s["winner"] == s["rows"][0]["key"]
     assert s["best_network"] == next(r["key"] for r in s["rows"] if r["kind"] == "network")
     assert {r["kind"] for r in s["rows"]} == {"network", "classical"}
-    assert {"Chebyshev LS", "Cubic spline LS"} <= {r["key"] for r in s["rows"]}
-    assert len(s["rows"]) == 8 and sorted(r["slot"] for r in s["rows"]) == list(range(8))
+    assert {"Chebyshev LS", "Cubic spline LS", "RBF network LS"} <= {r["key"] for r in s["rows"]}
+    assert len(s["rows"]) == 9 and sorted(r["slot"] for r in s["rows"]) == list(range(9))
     for r in s["rows"]:
         assert len(r["pred"]) == len(s["grid"]["x"]), r["key"]
         assert r["rmse_gap"] > 0 and r["rmse_seen"] >= 0 and r["n_params"] > 0
@@ -671,3 +685,131 @@ def test_cross_site_writes_are_refused(client):
 def test_any_page_url_falls_through_to_the_app_shell(client):
     r = client.get("/experiments/e6")
     assert r.status_code == 200 and "text/html" in r.headers["content-type"]
+
+
+# ------------------------------------------------- analysis of one run, on request
+def test_units_of_the_last_layer_add_up_to_the_answer(client):
+    run = train(client, target="f1", hidden=[20], epochs=3, patience=0, n_train=60, n_val=20)
+    units, pred = run["final"]["units"], run["final"]["pred"]
+    assert len(units["curves"]) == lab.UNIT_CURVES and len(run["grid"]["units_x"]) == len(units["curves"][0])
+    total = [sum(c[i] for c in units["curves"]) + units["rest"][i] + units["offset"] for i in range(len(units["rest"]))]
+    assert total == pytest.approx(pred[::4], abs=2e-3)  # every curve is rounded to 4 digits
+    assert train(client, target="f5", **FAST)["final"]["units"] is None  # one input only
+
+
+def test_the_slope_of_the_network_follows_the_slope_of_the_function(client):
+    run = train(client, target="f2", hidden=[16, 16], optimizer="lm", epochs=60, patience=0, n_train=300, n_val=60)
+    slope = run["final"]["slope"]
+    assert len(slope["pred"]) == len(run["grid"]["slope_exact"]) == len(run["grid"]["x"])
+    assert slope["rmse"] < 0.5  # f2 = 2x^2 has slopes up to 8 inside the box
+    i = run["grid"]["x"].index(min(run["grid"]["x"], key=lambda v: abs(v - 1.0)))
+    assert run["grid"]["slope_exact"][i] == pytest.approx(4.0, abs=0.05)
+
+
+def test_the_trust_band_covers_fresh_noisy_points(client):
+    spec = dict(target="f1", hidden=[16], optimizer="lm", epochs=30, patience=0, n_train=300, n_val=60, sigma=0.2)
+    band = train(client, **spec)["final"]["band"]
+    assert band["level"] == 0.9 and band["n"] == lab.CAL_POINTS
+    assert 0.2 < band["half"] < 0.6  # 1.645 sigma = 0.33 when only the noise is left
+    assert train(client, points=WAVE, **FAST)["final"]["band"] is None  # measured data has no fresh points
+
+
+def test_the_replay_keeps_evenly_spread_curves_and_ends_on_the_device(client):
+    run = train(client, **FAST_LM)
+    reel = client.get(f"/api/lab/runs/{run['id']}/replay").json()
+    assert reel["epoch"][0] == 0 and len(reel["pred"]) == len(reel["epoch"])
+    assert reel["pred"][-1] == run["final"]["pred"]
+    reel = lab.Reel(4)
+    for i in range(100):
+        reel.add(lambda i=i: i)
+    assert len(reel.items) <= 4 and reel.items[0] == 0 and len(set(b - a for a, b in zip(reel.items, reel.items[1:]))) == 1
+
+
+def test_the_loss_landscape_shows_that_training_went_downhill(client):
+    run = train(client, target="f4", hidden=[8, 8], optimizer="lm", epochs=40, patience=0, n_train=200, n_val=40)
+    d = client.get(f"/api/lab/runs/{run['id']}/landscape").json()
+    n = lab.LANDSCAPE_N
+    assert len(d["alpha"]) == len(d["beta"]) == n and len(d["loss"]) == n * n
+    assert d["path"]["epoch"][0] == 0 and len(d["path"]["a"]) == len(d["path"]["b"]) == len(d["path"]["epoch"])
+    assert 0 < d["explained"] <= 1 + 1e-9
+
+    def loss_at(a, b):
+        i = min(range(n), key=lambda k: abs(d["alpha"][k] - a))
+        j = min(range(n), key=lambda k: abs(d["beta"][k] - b))
+        return d["loss"][i * n + j]
+
+    assert loss_at(0, 0) < loss_at(d["path"]["a"][0], d["path"]["b"][0])
+    queued = client.post("/api/lab/runs", json=dict(epochs=50_000, patience=0)).json()["id"]
+    assert client.get(f"/api/lab/runs/{queued}/landscape").status_code == 409
+    client.post(f"/api/lab/runs/{queued}/stop")
+
+
+@pytest.mark.parametrize("spec", [
+    dict(target="f4", hidden=[6], act="silu"),
+    dict(target="f5", hidden=[6], act="sine", w0=10, fourier_m=3),
+    dict(target="f7", arch="kan", widths=[2, 2, 1], grid=4),
+])
+def test_an_exported_device_answers_like_the_run(client, spec):
+    run = train(client, **spec, optimizer="lm", epochs=5, patience=0, n_train=80, n_val=20)
+    r = client.get(f"/api/lab/runs/{run['id']}/export")
+    assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
+    assert not re.search(r"^(import|from) funcprox", r.text, re.M)  # the file stands alone
+    scope: dict = {}
+    exec(r.text, scope)
+    rows = [[0.1], [0.7]] if spec["target"] == "f4" else [[0.1, 0.2], [0.7, 0.4]]
+    want = client.post(f"/api/lab/runs/{run['id']}/predict", json=dict(inputs=rows)).json()["y_hat"]
+    assert scope["predict"](rows).tolist() == pytest.approx(want, rel=1e-9, abs=1e-12)
+
+
+def test_a_saved_model_exports_too(client):
+    run = train(client, **FAST_LM)
+    client.post(f"/api/lab/runs/{run['id']}/save", json=dict(name="device"))
+    r = client.get("/api/models/device/export")
+    assert r.status_code == 200 and "def predict(x)" in r.text
+    assert client.get("/api/models/nothing/export").status_code == 404
+
+
+# ------------------------------------------------------------- three inputs, RBF
+def test_a_formula_of_three_inputs_trains_and_is_drawn_as_a_slice(client):
+    run = train(client, formula="x*y + sin(pi*z)", domain=[[-1, 1], [0, 2], [0, 1]], gap=[[-0.2, 0.2], [0.8, 1.2], [0.3, 0.7]],
+                hidden=[16, 16], optimizer="lm", epochs=30, patience=0, n_train=500, n_val=100)
+    assert run["status"] == "done" and run["final"]["metrics"]["rmse"] < 0.1
+    grid = run["grid"]
+    assert grid["kind"] == "2d" and grid["fixed"] == [0.5] and grid["box"] == [[-1, 1], [0, 2]]
+    assert grid["gap"] == [[-0.2, 0.2], [0.8, 1.2]]  # the slice at z = 0.5 passes through the hole
+    assert [b["model"] for b in run["final"]["baselines"]] == ["RBF network LS"]  # the tensor grids stop at two inputs
+    assert run["live"]["net"]["sizes"][0] == 3
+    answer = client.post(f"/api/lab/runs/{run['id']}/predict", json=dict(inputs=[[0.5, 0.5, 0.25]])).json()
+    assert answer["exact"][0] == pytest.approx(0.25 + math.sin(math.pi / 4))
+    assert client.post("/api/lab/runs", json=dict(formula="x + w")).status_code == 422
+
+
+def test_the_slice_drops_a_hole_it_does_not_cross(client):
+    body = dict(formula="x + y + z", gap=[[-0.2, 0.2], [-0.2, 0.2], [0.5, 0.9]])
+    assert client.post("/api/functions/preview", json=body).json()["grid"]["gap"] is None
+
+
+def test_the_rbf_network_fits_a_smooth_function_in_any_dimension():
+    from funcprox.baselines import RBFNet
+    for key, limit in (("f4", 1e-3), ("f5", 5e-2)):
+        ds = make_dataset(get_target(key), 1000, 100)
+        model = RBFNet(48).fit(ds.u_train, ds.y_train)
+        assert model.n_coef == 48 * (ds.target.dim + 1) + 1
+        assert float(np.sqrt(np.mean((model.predict(ds.u_test) - ds.y_test) ** 2))) < limit
+
+
+@pytest.mark.parametrize("name, f", [("x", lambda x: 3 * x - 1), ("x²", lambda x: x * x), ("log(x)", np.log), ("√x", np.sqrt),
+                                     ("|x|", lambda x: 2 * abs(x))])
+def test_an_edge_is_named_after_its_closest_simple_form(name, f):
+    x = np.linspace(0.5, 3.0, 64) if name in ("log(x)", "√x") else np.linspace(-1.0, 2.0, 64)
+    match = lab.closest_form(x, f(x), "x")
+    assert match["name"] == name and match["r2"] > 0.9999
+    assert lab.closest_form(x, np.full(64, 2.0), "x") is None  # a flat edge has no shape
+
+
+def test_a_wave_edge_reports_its_frequency_and_shift():
+    x = np.linspace(-1.0, 1.0, 64)
+    assert lab.closest_form(x, np.sin(2 * np.pi * x), "y")["name"] == "sin(2πy)"
+    match = lab.closest_form(x, np.sin(2.3 * x + 0.4), "x")
+    assert re.fullmatch(r"sin\(2\.[23]\d?·x \+0\.[34]\d?\)", match["name"]) and match["r2"] > 0.9999
+

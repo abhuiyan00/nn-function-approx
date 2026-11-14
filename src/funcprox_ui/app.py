@@ -13,11 +13,13 @@ from urllib.parse import urlsplit
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 import funcprox
+from funcprox import serialize
+from funcprox.export import export_source
 
 from . import catalog, registry
 from .jobs import JobQueue
@@ -49,6 +51,10 @@ def default_jobs() -> JobQueue:
 def sse(event: str, data) -> str:
     body = json.dumps(clean(data), ensure_ascii=False, allow_nan=False, separators=(",", ":"))
     return f"event: {event}\ndata: {body}\n\n"
+
+
+def python_file(name: str, source: str) -> PlainTextResponse:
+    return PlainTextResponse(source, media_type="text/x-python", headers={"Content-Disposition": f'attachment; filename="{name}.py"'})
 
 
 def event_stream(generator) -> StreamingResponse:
@@ -211,6 +217,26 @@ def create_app(models_dir: Path | None = None, jobs: JobQueue | None = None) -> 
 
         return event_stream(events())
 
+    def finished_run(run_id: str, what: str):
+        run = get_run(run_id)
+        if run.final is None:
+            raise HTTPException(409, f"only a finished run has {what}")
+        return run
+
+    @app.get("/api/lab/runs/{run_id}/replay")
+    def replay_run(run_id: str):
+        return get_run(run_id).replay()
+
+    @app.get("/api/lab/runs/{run_id}/landscape")
+    def landscape_run(run_id: str):
+        return finished_run(run_id, "a loss landscape").landscape()
+
+    @app.get("/api/lab/runs/{run_id}/export")
+    def export_run(run_id: str):
+        run = finished_run(run_id, "a device to export")
+        title = f"{run.spec.describe()}, trained on f = {run.target.formula}"
+        return python_file(f"funcprox_{run.id}", export_source(run.net, run.xs, run.ys, title))
+
     @app.post("/api/lab/runs/{run_id}/predict")
     def predict_run(run_id: str, body: PredictRequest):
         run = get_run(run_id)
@@ -247,6 +273,11 @@ def create_app(models_dir: Path | None = None, jobs: JobQueue | None = None) -> 
     @app.get("/api/models/{name}")
     def read_model(name: str):
         return registry.model_detail(model_path(name))
+
+    @app.get("/api/models/{name}/export")
+    def export_model(name: str):
+        net, xs, ys, meta = serialize.load(model_path(name))
+        return python_file(name, export_source(net, xs, ys, f"{meta.get('label', name)}, saved as {name}"))
 
     @app.post("/api/models/{name}/predict")
     def predict(name: str, body: PredictRequest):
