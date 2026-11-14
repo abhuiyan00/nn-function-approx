@@ -145,6 +145,37 @@ test("a drawn curve becomes the training data", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test("a class exercise: draw a wave, erase one hump, and see that no model knows what was erased", async ({ page }) => {
+  test.setTimeout(180_000);
+  await openFinder(page);
+  const emptyPadRefused = page.waitForResponse((r) => r.url().endsWith("/api/functions/preview") && r.status() === 422);
+  await page.getByRole("radio", { name: "Draw" }).click();
+  await emptyPadRefused; // the server refuses an empty pad on purpose; watch for errors after that
+  const errors = watchErrors(page);
+  const pad = (await page.getByTestId("draw-pad").boundingBox())!;
+  const at = (t: number) => ({ x: pad.x + 2 + t * (pad.width - 4), y: pad.y + pad.height * (0.5 - 0.35 * Math.sin(2 * Math.PI * t)) });
+  await page.mouse.move(at(0).x, at(0).y);
+  await page.mouse.down();
+  for (let i = 1; i <= 60; i++) await page.mouse.move(at(i / 60).x, at(i / 60).y);
+  await page.mouse.up();
+
+  await page.getByRole("radio", { name: "Eraser" }).click();
+  await page.mouse.move(at(0.6).x, pad.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(at(0.9).x, pad.y + 10, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.getByText(/\d+ points, \d+ hidden\./)).toBeVisible();
+  await expect(page.getByRole("slider", { name: "Missing middle starts at this x" })).toHaveValue(/^0\.1/);
+
+  await findButton(page).click();
+  await expect(page.getByTestId("search-status")).toContainText("Finished", { timeout: 120_000 });
+  await expect(page.getByRole("columnheader", { name: "In the hole" })).toBeVisible();
+  const gap = Number(await page.getByTestId("gap-rmse").innerText());
+  const seen = Number(await page.getByTestId("seen-rmse").innerText());
+  expect(gap).toBeGreaterThan(seen); // the erased hump was scored, and never trained on
+  expect(errors).toEqual([]);
+});
+
 test("searching again keeps both the old results and the new function in view", async ({ page }) => {
   await openFinder(page);
   await findButton(page).click();

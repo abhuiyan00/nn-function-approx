@@ -169,8 +169,8 @@ function Results({ state, onStop }: { state: SearchState; onStop: () => void }) 
         <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
           <Stat label="Closest network" value={<span className="block text-sm leading-snug whitespace-normal">{focus.key}</span>} detail={running ? "So far" : state.winner === focus.key ? "The closest curve of all" : `${state.winner} is closer`} />
           <Stat label={score} value={<span data-testid="best-rmse">{sci(focus.rmse)}</span>} detail="Over the whole range" />
-          {focus.rmse_gap != null && <Stat label="In the missing middle" value={sci(focus.rmse_gap)} detail="It saw no data here" />}
-          {focus.rmse_seen != null && <Stat label="Where it had data" value={sci(focus.rmse_seen)} />}
+          {focus.rmse_gap != null && <Stat label="In the missing middle" value={<span data-testid="gap-rmse">{sci(focus.rmse_gap)}</span>} detail="It saw no data here" />}
+          {focus.rmse_seen != null && <Stat label="Where it had data" value={<span data-testid="seen-rmse">{sci(focus.rmse_seen)}</span>} />}
         </div>
       )}
       <Card className="gap-2 p-4"><CurveChart state={state} shown={shown} /></Card>
